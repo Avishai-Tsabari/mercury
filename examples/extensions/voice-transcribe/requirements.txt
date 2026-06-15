@@ -1,0 +1,8 @@
+# Local transcription (voice-transcribe.provider=local). Install on the Mercury host:
+#   pip install -r requirements.txt
+transformers>=4.40.0
+torch>=2.0.0
+# Optional local engine when voice-transcribe.local_engine=faster_whisper (CTranslate2 models on Hub).
+faster-whisper>=1.0.0
+# Ships a platform ffmpeg binary when the `ffmpeg` command is missing (Telegram .ogg / Opus).
+imageio-ffmpeg>=0.4.9

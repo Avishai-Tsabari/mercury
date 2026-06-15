@@ -1,0 +1,53 @@
+/* Canonical design tokens. Source of truth: docs/DESIGN.md §2.
+ * Consumed by the Mercury agent dashboard (mercury-fork).
+ * The cloud console's globals.css carries a duplicate declaration with
+ * matching names; keep both in sync when retuning the palette.
+ * Light-mode overrides omitted — dashboard has no theme toggle.
+ * Surface-local tokens (--sidebar-bg, --sidebar-admin-bg in console;
+ * --hero-blob-* in marketing) live in their own files, not here. */
+:root {
+  /* Surfaces */
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-elevated: #1c2128;
+
+  /* Text */
+  --text: #e6edf3;
+  --muted: #8b949e;
+
+  /* Interactive */
+  --accent: #58a6ff;
+  --accent-subtle: rgba(88, 166, 255, 0.15); /* chips / selected rows */
+  --accent-tint: rgba(88, 166, 255, 0.05); /* surface wash */
+  --muted-subtle: rgba(139, 148, 158, 0.15);
+
+  /* Structure */
+  --border: #30363d;
+
+  /* Semantic */
+  --color-success: #3fb950;
+  --color-error: #f85149;
+  --color-warning: #d29922;
+  --success-tint: rgba(63, 185, 80, 0.05); /* surface wash */
+
+  /* Shape */
+  --radius: 6px;
+
+  /* Space badge palette — 8 deterministic slots */
+  --space-palette-0-bg: rgba(88, 166, 255, 0.15);
+  --space-palette-0-fg: #58a6ff;
+  --space-palette-1-bg: rgba(63, 185, 80, 0.15);
+  --space-palette-1-fg: #3fb950;
+  --space-palette-2-bg: rgba(248, 81, 73, 0.15);
+  --space-palette-2-fg: #f85149;
+  --space-palette-3-bg: rgba(210, 153, 34, 0.15);
+  --space-palette-3-fg: #d29922;
+  --space-palette-4-bg: rgba(188, 140, 255, 0.15);
+  --space-palette-4-fg: #bc8cff;
+  --space-palette-5-bg: rgba(57, 197, 207, 0.15);
+  --space-palette-5-fg: #39c5cf;
+  --space-palette-6-bg: rgba(227, 105, 61, 0.15);
+  --space-palette-6-fg: #e3693d;
+  --space-palette-7-bg: rgba(255, 123, 114, 0.15);
+  --space-palette-7-fg: #ff7b72;
+}

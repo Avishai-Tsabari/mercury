@@ -1,0 +1,15 @@
+name: research
+description: Research-focused assistant with web search and knowledge distillation
+version: 0.1.0
+
+agents_md: ./AGENTS.md
+
+extensions: []
+
+env: []
+
+defaults:
+  model_provider: anthropic
+  model: claude-sonnet-4-20250514
+  trigger_patterns: "@Mercury,Mercury"
+  bot_username: mercury

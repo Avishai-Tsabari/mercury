@@ -1,0 +1,25 @@
+{
+  "gws": {
+    "credentialEnvVar": "MERCURY_GWS_CREDENTIALS_JSON",
+    "env": {
+      "credentials": "MERCURY_GWS_CREDENTIALS_JSON",
+      "legacyCredentialsFile": "MERCURY_GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"
+    }
+  },
+  "yahoo-mail": {
+    "credentialEnvVar": "MERCURY_YAHOO_APP_PASSWORD",
+    "env": {
+      "email": "MERCURY_YAHOO_EMAIL",
+      "appPassword": "MERCURY_YAHOO_APP_PASSWORD"
+    }
+  },
+  "tradestation": {
+    "credentialEnvVar": null,
+    "env": {
+      "refreshToken": "MERCURY_TRADESTATION_REFRESH_TOKEN",
+      "accessToken": "MERCURY_TRADESTATION_ACCESS_TOKEN",
+      "clientId": "MERCURY_TS_CLIENT_ID",
+      "clientSecret": "MERCURY_TS_CLIENT_SECRET"
+    }
+  }
+}

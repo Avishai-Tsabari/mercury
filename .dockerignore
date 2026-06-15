@@ -1,0 +1,3 @@
+# Runtime-generated symlink — created by ensurePackageLink() on first startup.
+# Excluding it prevents a Windows dev machine's C:\ path from being baked into the image.
+resources/extensions/node_modules/

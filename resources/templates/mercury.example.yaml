@@ -1,0 +1,75 @@
+# Copy to mercury.yaml in your project root (optional).
+# Precedence: MERCURY_* env vars override this file when the env key is set.
+# Secrets (API keys, tokens, MERCURY_API_SECRET, etc.) belong in .env only — not here.
+
+# server:
+#   port: 8787
+#   bot_username: mercury
+
+# model:
+#   chain:
+#     - provider: anthropic
+#       model: claude-sonnet-4-20250514
+#   # Legacy single primary + optional fallback (when chain is omitted):
+#   # provider: anthropic
+#   # model: claude-sonnet-4-20250514
+#   # fallback_provider: openai
+#   # fallback: gpt-4o-mini
+#   # max_retries_per_leg: 2
+#   # chain_budget_ms: 120000
+#   # capabilities: { tools: false }
+
+# Top-level alias for model.chain (optional; model.chain wins if both are set):
+# model_chain:
+#   - provider: google
+#     model: gemini-2.5-flash
+
+# ingress:
+#   discord: false
+#   slack: false
+#   teams: false
+#   whatsapp: false
+#   telegram: false
+
+# runtime:
+#   data_dir: .mercury
+#   # auth_path: ...
+#   # whatsapp_auth_dir: .mercury/whatsapp-auth
+#   max_concurrency: 2
+#   log_level: info
+#   log_format: text
+#   rate_limit_per_user: 10
+#   rate_limit_window_ms: 60000
+
+# trigger:
+#   patterns: "@Mercury,Mercury"
+#   match: mention
+
+# conditional_context:
+#   enabled: true
+#   classifier: heuristic
+#   # classifier_provider: groq
+#   # classifier_model: llama-3.3-70b-versatile
+
+# compaction:
+#   keep_recent_tokens: 20000
+#   # After each full-session run, auto-compact if the pi session has more than this many entries (10–10000). Omit to disable.
+#   # auto_compact_threshold: 50
+
+# agent:
+#   image: ghcr.io/michaelliv/mercury-agent:latest
+#   container_timeout_ms: 300000
+#   container_bwrap_docker_compat: false
+
+# discord:
+#   gateway_duration_ms: 600000
+
+# telegram:
+#   format_enabled: true
+
+# media:
+#   enabled: true
+#   max_size_mb: 10
+
+# permissions:
+#   admins: ""

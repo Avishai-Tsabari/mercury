@@ -1,0 +1,46 @@
+alice|https://x.com/example/status/1234567890
+alice|I've been looking into different testing strategies for microservices. Integration tests vs contract tests — what do you all prefer?|2026-03-10T14:08:29.000Z
+bob|For me it depends on the service boundary. If it's an internal API I lean toward integration tests with a real database. For external APIs, contract tests make more sense.|2026-03-10T14:12:38.000Z
+alice|That's fair. I've been burned by mocking too much. Had a test suite that was all green but production broke because the mock didn't match the actual API.|2026-03-10T14:13:24.000Z
+bob|Classic mock drift. That's exactly why I prefer integration tests when possible.|2026-03-10T14:13:53.000Z
+bob|The tradeoff is speed obviously|2026-03-10T14:14:03.000Z
+bob|Integration tests are slow|2026-03-10T14:14:08.000Z
+alice|How do you handle the database setup?|2026-03-10T14:14:24.000Z
+alice|I've been using testcontainers. Spin up a Postgres container per test suite, run migrations, seed data, tear down.|2026-03-10T14:15:05.000Z
+alice|Works well but adds 10-15 seconds to startup|2026-03-10T14:15:23.000Z
+bob|Testcontainers is great. We use it too. For the startup cost, we run a shared container across the whole test run and just truncate tables between tests.|2026-03-10T14:16:51.000Z
+alice|But then you can't run tests in parallel|2026-03-10T14:17:23.000Z
+bob|Right, parallelism is the issue|2026-03-10T14:17:31.000Z
+alice|What about schemas?|2026-03-10T14:17:38.000Z
+bob|Separate schemas per test file. Each file gets its own schema, tables are identical.|2026-03-10T14:17:45.000Z
+bob|Parallel execution works, isolation is clean|2026-03-10T14:17:51.000Z
+alice|That's clever|2026-03-10T14:17:56.000Z
+bob|We wrote it up actually https://example.com/blog/parallel-integration-testing|2026-03-10T14:17:58.000Z
+alice|Ah I saw this one. The schema-per-file approach. We tried something similar but with database-per-file instead.|2026-03-10T14:18:06.000Z
+bob|Database per file is heavier but more isolated|2026-03-10T14:18:14.000Z
+bob|Depends on your test count honestly|2026-03-10T14:18:36.000Z
+alice|Around 200 test files right now|2026-03-10T14:18:41.000Z
+bob|200 databases is probably too many. Schema per file is better at that scale.|2026-03-10T14:18:46.000Z
+alice|Yeah we had issues with connection pool exhaustion|2026-03-10T14:18:52.000Z
+alice||2026-03-10T14:19:05.000Z
+bob|Right, each database needs its own connection pool. Schema approach shares the pool.|2026-03-10T14:19:35.000Z
+carol|Sorry jumping in late — has anyone tried Pact for contract testing? We use it between our frontend and API.|2026-03-10T14:20:42.000Z
+bob|Pact is solid for consumer-driven contracts. We used it at my previous job.|2026-03-10T14:21:57.000Z
+bob|The broker is annoying to maintain though|2026-03-10T14:22:22.000Z
+carol|We use PactFlow, the hosted version. Eliminates the broker problem.|2026-03-10T14:22:40.000Z
+carol|Main benefit for us is that frontend team writes the contract from their perspective, backend team verifies against it.|2026-03-10T14:23:12.000Z
+alice|How does that work with breaking changes?|2026-03-10T14:23:22.000Z
+carol|The can-i-deploy check in CI blocks any deploy that would break a consumer. Catches it before it reaches staging.|2026-03-10T14:23:32.000Z
+bob|That's the ideal flow. In practice I've seen teams just override the check when they're in a rush.|2026-03-10T14:23:46.000Z
+carol|Agreed. Cultural problem more than a tooling problem.|2026-03-10T14:24:00.000Z
+alice||2026-03-10T14:24:14.000Z
+bob|For what it's worth, we've settled on a layered approach: unit tests for business logic (fast, no I/O), integration tests with testcontainers for data layer, and a handful of end-to-end tests for critical paths.|2026-03-10T14:25:35.000Z
+bob|The end-to-end tests are the ones we argue about the most|2026-03-10T14:25:53.000Z
+alice|Same. End-to-end tests are either too flaky or too slow.|2026-03-10T14:26:00.000Z
+carol|We keep ours under 10. Only the happy paths that would page someone if broken.|2026-03-10T14:26:05.000Z
+bob|10 is a good number. We had 60 at one point and the suite took 45 minutes.|2026-03-10T14:26:13.000Z
+carol|Yikes|2026-03-10T14:26:20.000Z
+bob|Cut it down to 12 and CI went from 50 minutes to 8.|2026-03-10T14:26:34.000Z
+alice|That's a massive improvement|2026-03-10T14:26:55.000Z
+bob|The other 48 were testing things that integration tests already covered. Just slower.|2026-03-10T14:27:00.000Z
+bob|https://github.com/example/testcontainers-patterns

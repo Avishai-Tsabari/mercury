@@ -1,0 +1,108 @@
+{
+  "name": "mercury-ai",
+  "version": "0.4.5",
+  "description": "Personal AI assistant for chat platforms (WhatsApp, Slack, Discord, Telegram)",
+  "license": "MIT",
+  "author": "Avishai Tsabari",
+  "keywords": [
+    "ai",
+    "assistant",
+    "whatsapp",
+    "slack",
+    "discord",
+    "telegram",
+    "chatbot",
+    "pi"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Avishai-Tsabari/your-ai-assistant"
+  },
+  "type": "module",
+  "exports": {
+    "./extensions/types": {
+      "types": "./src/extensions/types.ts",
+      "default": "./src/extensions/types.ts"
+    },
+    "./tts": {
+      "types": "./src/tts/index.ts",
+      "default": "./src/tts/index.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "bin": {
+    "mercury": "./src/cli/mercury.ts",
+    "mercury-ctl": "./src/cli/mercury-ctl.ts"
+  },
+  "files": [
+    "src",
+    "resources",
+    "container",
+    "docs",
+    "examples",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "start": "bun run src/main.ts",
+    "build": "bun build src/main.ts --outdir dist --target bun",
+    "typecheck": "bunx tsc --noEmit",
+    "lint": "bunx biome check src/ tests/",
+    "lint:fix": "bunx biome check --fix src/ tests/",
+    "check:silent-catch": "bun run scripts/check-silent-catch.ts",
+    "check:sync-calls": "bun run scripts/check-sync-calls.ts",
+    "check:dep-floors": "bun run scripts/check-dep-floors.ts",
+    "check:no-hijack-verbs": "bun run scripts/check-no-hijack-verbs.ts src",
+    "check": "bun run check:silent-catch && bun run check:sync-calls && bun run check:dep-floors && bun run check:no-hijack-verbs && bun run typecheck && bun run lint && bun test",
+    "check:fix": "bun run check:silent-catch && bun run check:sync-calls && bun run check:dep-floors && bun run check:no-hijack-verbs && bun run typecheck && bun run lint:fix && bun test"
+  },
+  "dependencies": {
+    "@chat-adapter/discord": "^4.14.0",
+    "@chat-adapter/slack": "^4.14.0",
+    "@chat-adapter/teams": "^4.17.0",
+    "@chat-adapter/telegram": "^4.26.0",
+    "@mariozechner/pi-agent-core": "^0.65.2",
+    "@mariozechner/pi-ai": "^0.67.6",
+    "@mariozechner/pi-coding-agent": "^0.65.2",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "axios": "^1.15.0",
+    "chat": "^4.14.0",
+    "commander": "^14.0.3",
+    "cron-parser": "^5.5.0",
+    "discord.js": "^14.26.3",
+    "hono": "^4.12.21",
+    "qrcode-terminal": "^0.12.0",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "@types/node": "^25.6.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "bun-types": "^1.3.5",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "overrides": {
+    "axios": ">=1.15.1",
+    "undici": ">=6.23.0",
+    "yaml": ">=2.8.3",
+    "basic-ftp": ">=6.0.0",
+    "fast-xml-parser": ">=5.7.0",
+    "fast-xml-builder": ">=1.2.0",
+    "@anthropic-ai/sdk": ">=0.91.1",
+    "brace-expansion": ">=5.0.5",
+    "ip-address": ">10.1.0",
+    "protobufjs": "^7.5.6",
+    "@protobufjs/utf8": ">=1.1.1",
+    "fast-uri": ">=3.1.2",
+    "ws": ">=8.20.1",
+    "qs": ">=6.15.2",
+    "lodash": ">=4.18.1"
+  }
+}

@@ -1,0 +1,45 @@
+# Mercury Host Container
+# Runs the mercury-fork HTTP server (main.ts) on port 8787.
+# Distinct from container/Dockerfile which builds the inner pi coding-agent image.
+# Base pinned by digest: upstream oven/bun:1 drifted its default user between
+# v0.8.2 and v0.8.5, which silently broke uid-1000-owned state.db on redeploy.
+# See docs/debug/major/2026-04-16-host-base-image-user-drift.md.
+FROM oven/bun:1@sha256:8956c7667fa17beb6e3c664115e66bdacfe502da5d99603626e74c197bdef160
+USER root
+
+# Install Docker CLI — needed to spawn inner agent containers.
+# git is needed by `bun install` for the libsignal dep (git+ssh URL in bun.lock via baileys).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl gnupg lsb-release git && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
+      > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin && \
+    rm -rf /var/lib/apt/lists/*
+
+# ─── Install mercury-fork source at /app ─────────────────────────────────────
+WORKDIR /app
+COPY package.json bun.lock* ./
+RUN bun install --production
+COPY src/ src/
+COPY resources/ resources/
+COPY examples/extensions/ /tmp/examples-extensions/
+RUN while IFS= read -r ext || [ -n "$ext" ]; do \
+      ext=$(echo "$ext" | xargs); \
+      [ -z "$ext" ] && continue; \
+      cp -r "/tmp/examples-extensions/$ext" "/app/resources/extensions/$ext"; \
+    done < /app/resources/builtin-extensions.txt && \
+    rm -rf /tmp/examples-extensions/
+COPY examples/ examples/
+
+# ─── Mercury project root ─────────────────────────────────────────────────────
+# The node agent mounts persistent state at /home/mercury/agent/.mercury
+# process.cwd() = /home/mercury/agent → MERCURY_DATA_DIR=.mercury resolves correctly
+RUN mkdir -p /home/mercury/agent
+WORKDIR /home/mercury/agent
+
+EXPOSE 8787
+
+ENTRYPOINT ["bun", "run", "/app/src/main.ts"]

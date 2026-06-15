@@ -1,0 +1,15 @@
+name: coding
+description: Code-focused assistant with sub-agent delegation and web search
+version: 0.1.0
+
+agents_md: ./AGENTS.md
+
+extensions: []
+
+env: []
+
+defaults:
+  model_provider: anthropic
+  model: claude-sonnet-4-20250514
+  trigger_patterns: "@Mercury,Mercury"
+  bot_username: mercury

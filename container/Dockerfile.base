@@ -1,0 +1,109 @@
+# syntax=docker/dockerfile:1
+# Mercury Agent Container — Base tier
+# Base: Microsoft Playwright image (Ubuntu 24.04 noble + Node 22 + Chromium + X11/GL deps preinstalled).
+# Adds: Bun, poppler-utils, pandoc, imagemagick, pi-coding-agent, mercury (UID 1000) user.
+FROM oven/bun:1 AS bun-source
+FROM mcr.microsoft.com/playwright:v1.55.0-noble
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Document-processing tools. Wrapped in a retry loop — archive.ubuntu.com is periodically flaky
+# and a single apt miss shouldn't fail the whole image build.
+RUN set -eux; \
+    for i in 1 2 3 4 5; do \
+      apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils pandoc imagemagick wget \
+      && break \
+      || { echo "apt attempt $i/5 failed, sleeping 15s" >&2; apt-get clean; sleep 15; }; \
+    done; \
+    rm -rf /var/lib/apt/lists/*
+
+# Rename the built-in ubuntu user (UID 1000) to mercury.
+# Playwright's noble base inherits the ubuntu user at UID/GID 1000; useradd -u 1000
+# would fail. (pwuser is at UID 1001 — unused by us.)
+RUN usermod -l mercury -d /home/mercury -m ubuntu && groupmod -n mercury ubuntu
+
+# Copy Bun from official image
+COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=bun-source /usr/local/bin/bunx /usr/local/bin/bunx
+
+ENV HOME="/home/mercury"
+ENV BUN_INSTALL="/home/mercury/.bun"
+ENV PATH="$BUN_INSTALL/bin:/usr/local/bin:$PATH"
+
+# Chromium lives in /ms-playwright/chromium-*/chrome-linux/chrome in the Playwright image.
+# Symlink to /usr/local/bin/chromium so puppeteer-using npm packages find it.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+RUN ln -sf "$(find /ms-playwright -name chrome -type f -executable | head -1)" /usr/local/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chromium
+
+# --no-sandbox: Chromium can't use its user namespace sandbox inside a container
+RUN echo '{"args":["--no-sandbox"]}' > /home/mercury/.puppeteerrc.json
+ENV CHROMIUM_FLAGS="--no-sandbox"
+
+# Install CLIs
+RUN bun add -g @mariozechner/pi-coding-agent@^0.67.2
+
+WORKDIR /app
+
+COPY container/agent-package.json /app/package.json
+RUN bun install --production
+
+# Patch pi: skip thinkingConfig for Gemma models (Google API rejects thinkingBudget for them,
+# but pi marks gemma-4 as reasoning:true and sends thinkingBudget:0 to disable it)
+RUN node <<'EOF'
+const fs = require('fs'), path = require('path');
+function patch(dir) {
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const p = path.join(dir, f);
+      try {
+        if (fs.statSync(p).isDirectory()) patch(p);
+        else if (f === 'google.js' && p.includes('@mariozechner/pi-ai')) {
+          let c = fs.readFileSync(p, 'utf8');
+          const noThinking = '&& !model.id.startsWith("gemma")';
+          const p1 = 'if (options.thinking?.enabled && model.reasoning) {';
+          const p2 = 'else if (model.reasoning && options.thinking && !options.thinking.enabled) {';
+          if (!c.includes(noThinking)) {
+            c = c.replace(p1, 'if (options.thinking?.enabled && model.reasoning ' + noThinking + ') {');
+            c = c.replace(p2, 'else if (model.reasoning && options.thinking && !options.thinking.enabled ' + noThinking + ') {');
+            fs.writeFileSync(p, c);
+            console.log('Patched:', p);
+          }
+        }
+      } catch(e) {}
+    }
+  } catch(e) {}
+}
+patch('/home/mercury/.bun');
+patch('/app/node_modules');
+EOF
+
+COPY src/agent/container-entry.ts /app/src/agent/container-entry.ts
+COPY src/agent/model-capabilities-core.ts /app/src/agent/model-capabilities-core.ts
+COPY src/agent/pi-failure-class.ts /app/src/agent/pi-failure-class.ts
+COPY src/agent/pi-jsonl-parser.ts /app/src/agent/pi-jsonl-parser.ts
+COPY src/agent/preferences-prompt.ts /app/src/agent/preferences-prompt.ts
+COPY src/cli/mrctl.ts /app/src/cli/mrctl.ts
+COPY src/cli/mrctl-http.ts /app/src/cli/mrctl-http.ts
+COPY src/extensions/reserved.ts /app/src/extensions/reserved.ts
+COPY src/extensions/permission-guard.ts /app/src/extensions/permission-guard.ts
+COPY src/types.ts /app/src/types.ts
+COPY resources/ /app/resources/
+COPY examples/extensions/ /tmp/examples-extensions/
+RUN while IFS= read -r ext || [ -n "$ext" ]; do \
+      ext=$(echo "$ext" | xargs); \
+      [ -z "$ext" ] && continue; \
+      cp -r "/tmp/examples-extensions/$ext" "/app/resources/extensions/$ext"; \
+    done < /app/resources/builtin-extensions.txt && \
+    rm -rf /tmp/examples-extensions/
+
+RUN echo '#!/bin/sh\nbun run /app/src/cli/mrctl.ts "$@"' > /usr/local/bin/mrctl && \
+    chmod +x /usr/local/bin/mrctl
+
+# Fix ownership of all mercury home dir artifacts before switching user
+RUN chown -R mercury:mercury /home/mercury
+
+USER mercury
+
+ENTRYPOINT ["bun", "run", "/app/src/agent/container-entry.ts"]

@@ -1,0 +1,7 @@
+# Force LF for files that run on Linux (shebangs break with CRLF)
+*.mjs text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+# Distillation prompt ships in the cloud agent image and is read at runtime;
+# keep it LF so a Windows checkout never injects \r into the prompt.
+examples/extensions/napkin/prompts/*.md text eol=lf

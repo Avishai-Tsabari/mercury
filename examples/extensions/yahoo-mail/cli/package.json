@@ -1,0 +1,13 @@
+{
+  "name": "ymail",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ymail": "./ymail.mjs"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.171",
+    "nodemailer": "^8.0.5"
+  }
+}

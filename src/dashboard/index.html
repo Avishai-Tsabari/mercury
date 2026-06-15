@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mercury</title>
+  <link rel="stylesheet" href="/dashboard/tokens.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────────────────── */
+
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────────────────── */
+
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo svg { color: var(--text); flex-shrink: 0; }
+
+    .logo-version {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-left: 2px;
+    }
+
+    /* ─── Health Banner ──────────────────────────────────────────────────── */
+
+    .health-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    .health-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .health-status.healthy { color: var(--color-success); }
+    .health-status.degraded { color: var(--color-warning); }
+    .health-status.critical { color: var(--color-error); }
+
+    .health-icon { font-size: 14px; }
+
+    .health-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--muted);
+    }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .connection::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+    }
+
+    .connection.disconnected::before { background: var(--color-error); }
+
+    /* ─── Navigation ─────────────────────────────────────────────────────── */
+
+    .nav {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .nav-item {
+      padding: 10px 16px;
+      color: var(--muted);
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .nav-item:hover { color: var(--text); }
+
+    .nav-item.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .nav-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+    }
+
+    /* ─── Panels ─────────────────────────────────────────────────────────── */
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      background: var(--surface);
+    }
+
+    .panel-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-body { padding: 12px 16px; min-width: 0; }
+
+    /* ─── Grid ───────────────────────────────────────────────────────────── */
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Stats ──────────────────────────────────────────────────────────── */
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 16px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    /* ─── Tables ─────────────────────────────────────────────────────────── */
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .table th {
+      text-align: left;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table tr:last-child td { border-bottom: none; }
+
+    .table tr.clickable { cursor: pointer; }
+    .table tr.clickable:hover { background: var(--surface-elevated); }
+
+    .table .actions { white-space: nowrap; }
+
+    /* ─── Rows ───────────────────────────────────────────────────────────── */
+
+    .adapter-row, .task-row, .role-row, .active-run {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .adapter-row:last-child, .task-row:last-child, 
+    .role-row:last-child, .active-run:last-child { border-bottom: none; }
+
+    .activity-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .activity-row:hover { background: var(--surface-elevated); margin: 0 -16px; padding: 8px 16px; }
+    .activity-row:last-child { border-bottom: none; }
+
+    .activity-row .time { color: var(--muted); min-width: 60px; font-size: 12px; }
+    .activity-row .preview { color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ─── Messages ───────────────────────────────────────────────────────── */
+
+    .messages-list {
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .scroll-cap {
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    .message {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .message:last-child { border-bottom: none; }
+
+    .message-meta {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .message-content {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .message.assistant { background: var(--accent-tint); }
+    .message.user { background: var(--success-tint); }
+
+    /* ─── Logs ───────────────────────────────────────────────────────────── */
+
+    .logs-list {
+      max-height: 600px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+    }
+
+    .log-row {
+      display: flex;
+      gap: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .log-row:last-child { border-bottom: none; }
+    .log-row .time { color: var(--muted); min-width: 80px; }
+    .log-row .level { min-width: 50px; font-weight: 500; }
+    .log-row .level.info { color: var(--accent); }
+    .log-row .level.error { color: var(--color-error); }
+    .log-row .level.warn { color: var(--color-warning); }
+    .log-row .source { color: var(--muted); min-width: 80px; }
+    .log-row .message { flex: 1; }
+
+    /* ─── Elements ───────────────────────────────────────────────────────── */
+
+    .badge {
+      display: inline-block;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .badge.green { border-color: var(--color-success); color: var(--color-success); }
+    .badge.muted { border-color: var(--muted); color: var(--muted); }
+    .badge.pulse { animation: pulse 2s ease-in-out infinite; background: var(--color-warning); border-color: var(--color-warning); color: var(--bg); }
+
+    .space-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+    .space-badge-0 { background: var(--space-palette-0-bg); color: var(--space-palette-0-fg); }
+    .space-badge-1 { background: var(--space-palette-1-bg); color: var(--space-palette-1-fg); }
+    .space-badge-2 { background: var(--space-palette-2-bg); color: var(--space-palette-2-fg); }
+    .space-badge-3 { background: var(--space-palette-3-bg); color: var(--space-palette-3-fg); }
+    .space-badge-4 { background: var(--space-palette-4-bg); color: var(--space-palette-4-fg); }
+    .space-badge-5 { background: var(--space-palette-5-bg); color: var(--space-palette-5-fg); }
+    .space-badge-6 { background: var(--space-palette-6-bg); color: var(--space-palette-6-fg); }
+    .space-badge-7 { background: var(--space-palette-7-bg); color: var(--space-palette-7-fg); }
+    .space-badge-unknown { background: transparent; border-color: var(--muted); color: var(--muted); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .btn:hover { background: var(--surface-elevated); border-color: var(--muted); }
+
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+    .btn-danger:hover { border-color: var(--color-error); color: var(--color-error); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .status.connected::before { background: var(--color-success); }
+    .status.active::before { background: var(--color-warning); animation: pulse 1s ease-in-out infinite; }
+
+    .role { font-weight: 500; font-size: 12px; }
+    .role.user { color: var(--accent); }
+    .role.assistant { color: var(--color-success); }
+    .role.ambient { color: var(--muted); }
+
+    .mono { font-family: 'SF Mono', 'Fira Code', monospace; color: var(--accent); }
+    .muted { color: var(--muted); }
+    .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .empty, .empty-small { 
+      color: var(--muted); 
+      font-style: italic; 
+      text-align: center; 
+    }
+    .empty { padding: 24px 0; }
+    .empty-small { padding: 12px 0; }
+
+    .link {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .link:hover { text-decoration: underline; }
+
+    .back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+    }
+
+    .back:hover { color: var(--text); }
+
+    /* ─── Page Header ────────────────────────────────────────────────────── */
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .page-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .search-box input, .select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      width: 200px;
+    }
+
+    .search-box input:focus, .select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* ─── Scroll container with edge-fade ───────────────────────────────── */
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      /* symmetric two-edge fade — RTL-safe, no directional offset */
+      mask-image: linear-gradient(90deg, transparent 0, black 16px, black calc(100% - 16px), transparent 100%);
+    }
+
+    /* prevent column compression — table sizes to content, .table-scroll handles scroll */
+    .table-scroll .table { width: max-content; min-width: 100%; }
+
+    /* ─── Responsive ─────────────────────────────────────────────────────── */
+
+    @media (max-width: 768px) {
+      .shell { padding: 0 12px; }
+      .header { flex-direction: column; gap: 12px; }
+      .health-banner { flex-direction: column; gap: 8px; }
+      .nav { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+      .nav::-webkit-scrollbar { display: none; }
+      .nav-item { padding: 10px 12px; white-space: nowrap; }
+      .page-header { flex-direction: column; gap: 12px; align-items: flex-start; }
+      .search-box input { width: 100%; }
+    }
+
+    @media (max-width: 640px) {
+      .panel-body { padding: 8px 12px; }
+      .nav-item { min-height: 44px; display: flex; align-items: center; }
+      .btn { min-height: 44px; }
+    }
+
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .badge.pulse,
+      .status.active::before { animation: none; }
+    }
+  </style>
+</head>
+<body hx-ext="sse" sse-connect="/dashboard/events">
+  <div class="shell">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-left">
+        <div class="logo">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6.5 4.5C6.5 2.5 13.5 2.5 13.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+            <circle cx="10" cy="9" r="4" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <line x1="10" y1="13" x2="10" y2="18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="7" y1="16" x2="13" y2="16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Mercury <span class="logo-version">{{VERSION}}</span>
+        </div>
+      </div>
+      <div id="active-count" sse-swap="active-count"></div>
+    </div>
+
+    <!-- Health Banner -->
+    <div class="health-banner" id="health" sse-swap="health">
+      <div class="health-status">
+        <span class="health-icon">⏳</span>
+        <span class="health-message">Connecting...</span>
+      </div>
+      <div class="health-meta">
+        <span class="connection" id="connection">live</span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+      <a class="nav-item active"
+         hx-get="/dashboard/page/overview"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Summary of spaces, recent activity, and system health (shortcut: 1)">Overview</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/spaces"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Manage memory spaces and their linked conversations (shortcut: 2)">Spaces</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/conversations"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Browse all discovered platform conversations across adapters (shortcut: 3)">Conversations</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/tasks"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Scheduled tasks — cron jobs and one-shot timers (shortcut: 4)">Tasks</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/permissions"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Role assignments and permission sets per space (shortcut: 5)">Permissions</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/logs"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Live agent logs (shortcut: 6)">Logs</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/usage"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Token and cost usage statistics (shortcut: 7)">Usage</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/billing"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Subscription and billing details (shortcut: 8)">Billing</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/keys"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Manage AI provider API keys">API keys</a>
+      <a class="nav-item"
+         hx-get="/dashboard/page/features"
+         hx-target="#main"
+         hx-push-url="true"
+         onclick="setActiveNav(this)"
+         title="Experimental features and extension configuration">Features</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="main" hx-get="/dashboard/page/overview" hx-trigger="load">
+      <div class="empty">Loading...</div>
+    </main>
+  </div>
+
+  <script>
+    // Navigation (global for hx-on/htmx; Biome cannot see HTML callers)
+    globalThis.setActiveNav = function setActiveNav(el) {
+      for (const item of document.querySelectorAll('.nav-item')) {
+        item.classList.remove('active');
+      }
+      el.classList.add('active');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' });
+    }
+
+    // Scroll initially active tab into view on load
+    document.addEventListener('DOMContentLoaded', () => {
+      const active = document.querySelector('.nav-item.active');
+      if (active) active.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'auto' });
+    });
+
+    // Handle browser back/forward
+    window.addEventListener('popstate', () => {
+      const path = window.location.pathname;
+      const navItems = document.querySelectorAll('.nav-item');
+      navItems.forEach(item => {
+        const href = item.getAttribute('hx-get');
+        if (path.includes(href.replace('/dashboard/page/', ''))) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    });
+
+    // SSE connection state
+    const connectionEl = document.getElementById('connection');
+    
+    document.body.addEventListener('htmx:sseOpen', () => {
+      connectionEl.textContent = 'live';
+      connectionEl.classList.remove('disconnected');
+    });
+
+    document.body.addEventListener('htmx:sseError', () => {
+      connectionEl.textContent = 'reconnecting...';
+      connectionEl.classList.add('disconnected');
+    });
+
+    document.body.addEventListener('htmx:sseClose', () => {
+      connectionEl.textContent = 'disconnected';
+      connectionEl.classList.add('disconnected');
+    });
+
+    // Table search filter
+    function _filterTable(input, tableId) {
+      const filter = input.value.toLowerCase();
+      const table = document.getElementById(tableId);
+      const rows = table.querySelectorAll('tbody tr');
+
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+      });
+    }
+
+    // Space filter for the tasks table
+    function _filterTasksBySpace(select) {
+      const wanted = select.value;
+      document.querySelectorAll('#tasks-table tbody tr').forEach(row => {
+        row.style.display = (!wanted || row.dataset.spaceId === wanted) ? '' : 'none';
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Don't trigger when typing in inputs
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      const navItems = document.querySelectorAll('.nav-item');
+      
+      if (e.key === '1') navItems[0]?.click();
+      if (e.key === '2') navItems[1]?.click();
+      if (e.key === '3') navItems[2]?.click();
+      if (e.key === '4') navItems[3]?.click();
+      if (e.key === '5') navItems[4]?.click();
+      if (e.key === '6') navItems[5]?.click();
+      if (e.key === '7') navItems[6]?.click();
+      if (e.key === '8') navItems[7]?.click();
+      if (e.key === '?') alert('Keyboard shortcuts:\n1-8: Navigate tabs\n/: Focus search');
+      if (e.key === '/') {
+        e.preventDefault();
+        document.querySelector('input[type="text"]')?.focus();
+      }
+    });
+
+    // Refresh current page after htmx actions (like delete, pause, etc.)
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.requestConfig.verb !== 'get') {
+        // Refresh the current page after mutations
+        setTimeout(() => {
+          const activeNav = document.querySelector('.nav-item.active');
+          if (activeNav) activeNav.click();
+        }, 100);
+      }
+    });
+
+    // Handle hash-based navigation on page load (for refresh support)
+    window.addEventListener('DOMContentLoaded', () => {
+      const hash = window.location.hash.slice(1); // Remove #
+      if (hash) {
+        // Find the nav item that matches and click it
+        const navItems = document.querySelectorAll('.nav-item');
+        let found = false;
+        for (const item of navItems) {
+          const href = item.getAttribute('hx-get');
+          if (href?.includes(hash.split('/')[0])) {
+            item.click();
+            found = true;
+            break;
+          }
+        }
+        // If it's a detail page (e.g., groups/id), load it directly
+        if (!found && hash.includes('/')) {
+          htmx.ajax('GET', `/dashboard/page/${hash}`, '#main');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

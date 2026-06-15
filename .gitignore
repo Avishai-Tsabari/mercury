@@ -1,0 +1,13 @@
+node_modules
+.env
+dist
+.nano-pi
+.nanny
+.env
+.clawsome/
+.mercury/
+resources/extensions/*
+!resources/extensions/.gitkeep
+.DS_Store
+.claude/
+.pi/

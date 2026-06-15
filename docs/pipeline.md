@@ -1,0 +1,228 @@
+# Message Pipeline
+
+Mercury connects to chat platforms through **adapters** and **bridges**. Messages flow through a standardized pipeline regardless of platform:
+
+```
+Platform → Adapter → parseThread() → resolveConversation() → PlatformBridge.normalize() → handleRawInput() → Container → PlatformBridge.sendReply()
+```
+
+## Architecture
+
+```
+Platform (WhatsApp / Discord / Telegram / Slack)
+  │
+  ├─► Adapter receives raw message
+  │     • Platform-specific connection (socket, webhook)
+  │     • Mention normalization, reply-to-bot detection
+  │     • Media download (WhatsApp only — uses Baileys socket)
+  │     • Passes data via message metadata
+  │
+  ├─► Unified handler (src/core/handler.ts)
+  │     • Parse platform thread into an external conversation ID
+  │     • Resolve/create conversation in DB
+  │     • Ignore unlinked conversations
+  │     • Pre-route trigger check (cheap, sync)
+  │     • Start typing indicator if matched
+  │     • Call bridge.normalize(..., spaceId) → IngressMessage
+  │     • Start typing for reply-to-bot (detected during normalize)
+  │
+  ├─► core.handleRawInput(IngressMessage)
+  │     • Route: trigger match, permissions, command detection
+  │     • If triggered → queue → container run → ContainerResult
+  │     • If not triggered → store as ambient context
+  │     • If command → execute immediately (stop, compact)
+  │     • If denied → return reason
+  │
+  └─► bridge.sendReply(text, files?)
+        • Text reply via adapter
+        • File attachments via platform-specific API
+```
+
+## PlatformBridge
+
+Each platform implements a single `PlatformBridge` interface covering both ingress and egress:
+
+```typescript
+interface PlatformBridge {
+  readonly platform: string;
+  parseThread(threadId: string): { externalId: string; isDM: boolean };
+  normalize(threadId, message, ctx, spaceId): Promise<IngressMessage | null>;
+  sendReply(threadId, text, files?): Promise<void>;
+}
+```
+
+Bridges live in `src/bridges/`:
+
+| Bridge | File | Platform details |
+|--------|------|-----------------|
+| `WhatsAppBridge` | `src/bridges/whatsapp.ts` | Baileys socket for file sending |
+| `DiscordBridge` | `src/bridges/discord.ts` | discord.js channel.send() for files |
+| `TelegramBridge` | `src/bridges/telegram.ts` | sendDocument API for files |
+| `SlackBridge` | `src/bridges/slack.ts` | Slack files.uploadV2 API |
+
+## Ingress
+
+### IngressMessage
+
+Every adapter produces a normalized `IngressMessage`:
+
+```typescript
+interface IngressMessage {
+  platform: string;
+  spaceId: string;
+  conversationExternalId: string;
+  callerId: string;        // "whatsapp:jid", "discord:123", "telegram:123", "slack:U123"
+  authorName?: string;
+  text: string;
+  isDM: boolean;
+  isReplyToBot: boolean;
+  attachments: MessageAttachment[];
+}
+```
+
+All fields are required — no optional booleans or arrays. `spaceId` is the resolved memory boundary; `conversationExternalId` is the platform-native conversation key used for routing.
+
+### inbox/ directory
+
+Incoming media attachments are downloaded to `{workspace}/inbox/`:
+
+```
+{workspace}/
+├── inbox/
+│   ├── 1741243200000-photo.jpg
+│   ├── 1741243500000-voice.ogg
+│   └── 1741244000000-report.pdf
+```
+
+WhatsApp downloads via Baileys socket. Discord and Slack use URL-based download (`src/core/media.ts`) with optional auth headers.
+
+## Egress
+
+### ContainerResult
+
+Container runs return `ContainerResult` instead of a plain string:
+
+```typescript
+interface ContainerResult {
+  reply: string;
+  files: EgressFile[];  // Scanned from workspace outbox/
+}
+```
+
+### outbox/ directory
+
+The model writes files to `./outbox/` during a run. After the container exits, the runtime scans for files with `mtime >= startTime` — new or modified files are attached to the reply.
+
+```
+{workspace}/
+├── outbox/
+│   ├── chart.png       ← written by model, sent with reply
+│   └── summary.pdf     ← written by model, sent with reply
+```
+
+Previous outbox files are NOT deleted — the agent retains history. Only files created or modified during the current run are sent.
+
+### File sending by platform
+
+| Platform | Mechanism |
+|----------|-----------|
+| WhatsApp | `sock.sendMessage()` with image/video/audio/document content types, caption on last file |
+| Discord | `channel.send({ files: [...] })` — text + files in one message |
+| Telegram | `sendDocument` API — text sent first, then files uploaded separately |
+| Slack | `files.uploadV2` API — text sent first, then files uploaded separately |
+
+## Adapters
+
+### WhatsApp
+
+Uses [Baileys](https://github.com/WhiskeySockets/Baileys) for a direct WebSocket connection.
+
+| Detail | Value |
+|--------|-------|
+| **Connection** | WebSocket (Baileys) |
+| **Space ID** | Full thread ID (e.g., `whatsapp:12345@g.us:12345@g.us`) |
+| **DM detection** | Thread ID does not contain `@g.us` |
+| **@mention** | Bot JID mention replaced with configured `userName` in adapter |
+| **Reply-to-bot** | Quoted message participant matches bot JID |
+| **Media** | Downloaded via Baileys to `inbox/` |
+
+### Discord
+
+Uses discord.js with persistent WebSocket gateway.
+
+| Detail | Value |
+|--------|-------|
+| **Connection** | WebSocket (discord.js) |
+| **Space ID** | Full thread ID (e.g., `discord:guild:channel[:thread]`) |
+| **DM detection** | Guild ID is `@me` |
+| **@mention** | `<@botId>` converted to `@userName` in bridge |
+| **Reply-to-bot** | Replied-to message author matches bot ID |
+| **Media** | Downloaded from CDN URLs to `inbox/` |
+
+### Telegram
+
+Uses `@chat-adapter/telegram` with webhook or long-polling.
+
+| Detail | Value |
+|--------|-------|
+| **Connection** | Webhook (`POST /webhooks/telegram`) or polling |
+| **Space ID** | Full thread ID (e.g., `telegram:<chatId>` or `telegram:<chatId>:<messageThreadId>`) |
+| **DM detection** | Chat ID does not start with `-` |
+| **@mention** | Bot username mention in entities |
+| **Reply-to-bot** | `reply_to_message.from.id` matches bot user ID (derived in bridge; adapter does not set metadata) |
+| **Media** | Downloaded from Telegram file URLs to `inbox/` |
+
+### Slack
+
+Uses `@chat-adapter/slack` with webhook-based event delivery.
+
+| Detail | Value |
+|--------|-------|
+| **Connection** | Webhook (`POST /webhooks/slack`) |
+| **Conversation external ID** | `slack:<channelId>` or `slack:<channelId>:<threadTs>` |
+| **DM detection** | Channel starts with `D` or `G` |
+| **Reply-to-bot** | Not implemented (Slack threading model) |
+| **Media** | Downloaded from `url_private` with bot token auth to `inbox/` |
+
+## Trigger Matching
+
+All platforms share the same trigger engine. A pre-route check runs before `normalize()` so the typing indicator fires early.
+
+| Mode | Behavior |
+|------|----------|
+| `mention` | Message contains trigger pattern as a standalone word (default) |
+| `prefix` | Message starts with trigger pattern |
+| `always` | Every message triggers a response |
+
+DMs always match regardless of mode.
+
+**Attachment-only in groups** (voice note, image with no caption): by default these do **not** match `mention` or `prefix` — use `trigger.match=always`, reply to the bot’s message, or set per-space `trigger.media_in_groups=true` so voice/media alone can trigger without spamming text-only noise.
+
+### Reply-to-Bot
+
+Replying to a bot message triggers a response without explicit `@mention`. Works on WhatsApp, Discord, and Telegram. Not implemented for Slack.
+
+## Chat API (Direct Bridge)
+
+`POST /chat` provides a synchronous HTTP bridge for external agents, scripts, or CLIs. No platform adapter needed — it constructs an `IngressMessage` directly and runs through the same pipeline.
+
+```bash
+mercury chat "hello"
+mercury chat --file photo.jpg "what's in this?"
+mercury chat --space my-project "check status"
+echo "summarize" | mercury chat
+curl -X POST localhost:8787/chat -H 'Content-Type: application/json' \
+  -d '{"text": "hello", "callerId": "api:my-agent"}'
+```
+
+Request: `{ text, callerId?, spaceId?, authorName?, files?: [{ name, data(base64) }] }`
+Response: `{ reply, files: [{ filename, mimeType, sizeBytes, data(base64) }] }`
+
+Input files are saved to the target space's `inbox/`. Output files are read from `outbox/` and returned as base64. Messages are always treated as DMs with `isReplyToBot: true`, so they always trigger a response regardless of trigger mode.
+
+## Adding a New Platform
+
+1. Implement `PlatformBridge` in `src/bridges/<platform>.ts`
+2. Create adapter in `src/adapters/<platform>.ts` (or use existing chat-sdk adapter)
+3. Register bridge in `src/main.ts`
+4. Add tests in `tests/<platform>-bridge.test.ts`

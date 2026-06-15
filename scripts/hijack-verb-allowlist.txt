@@ -1,0 +1,29 @@
+# Hijack-verb-gate allowlist — one repo-root-relative path glob per line.
+# Listed paths are allowed to mention forbidden Docker hijack verbs because
+# they are documentation, the body-proxy's own gate strings, or the verifier
+# script that asserts those gates fire. Every other source file must avoid
+# these verbs entirely — see /scripts/check-no-hijack-verbs.ts.
+
+# The body-proxy's own gate strings (defines the 501 reason text).
+mercury-node-agent/src/create-proxy.ts
+
+# Tests that assert the hijack classifier + 501 path (must reference the verbs).
+mercury-node-agent/tests/create-policy.test.ts
+mercury-node-agent/tests/nodeagent-proxy.test.ts
+mercury-node-agent/tests/forward-streaming.test.ts
+
+# The verifier script that exercises the 501 path against a live proxy.
+mercury-node-agent/scripts/verify-streaming-passthrough.ts
+
+# The gate itself + this allowlist are obviously exempt.
+scripts/check-no-hijack-verbs.ts
+scripts/hijack-verb-allowlist.txt
+
+# Smoke heartbeat-sidecar assertion exercises docker logs -f (NOT a hijack verb,
+# but a runtime-level "Detach: true" exec might be present — list defensively).
+mercury-cloud-console/scripts/smoke.ts
+mercury-cloud-console/scripts/smoke/**
+
+# Documentation — post-mortems and architecture docs describe the verbs.
+docs/**
+CLAUDE.md
