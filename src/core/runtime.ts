@@ -858,9 +858,33 @@ export class MercuryCoreRuntime {
         };
       }
 
+      // Resolve reply target once — reused for context assembly and DB linkage.
+      let replyMercuryMsgId: number | null = null;
+      if (
+        replyMeta?.replyToPlatformMessageId &&
+        replyMeta.platform &&
+        replyMeta.conversationExternalId
+      ) {
+        replyMercuryMsgId = this.db.lookupMercuryMessageId(
+          replyMeta.platform,
+          replyMeta.conversationExternalId,
+          replyMeta.replyToPlatformMessageId,
+        );
+      }
+      const userReplyToId = replyMercuryMsgId ?? undefined;
+
+      const replyChainDepthStr = this.db.getSpaceConfig(
+        spaceId,
+        "context.reply_chain_depth",
+      );
+      const replyChainDepth = replyChainDepthStr
+        ? Number.parseInt(replyChainDepthStr, 10)
+        : 10;
+
       // Fetch prior turns based on context mode.
       // When reply-isolated, skip all history to prevent context leakage.
       let history: import("../types.js").StoredMessage[];
+      let anchorMessages: import("../types.js").StoredMessage[] | undefined;
       if (replyIsolated) {
         history = [];
         extraEnv = { ...extraEnv, MERCURY_REPLY_ISOLATED: "1" };
@@ -876,50 +900,35 @@ export class MercuryCoreRuntime {
           const windowSize = windowSizeStr
             ? Number.parseInt(windowSizeStr, 10)
             : (this.config.contextWindowSize ?? 10);
-          history = this.db.getRecentTurns(spaceId, windowSize);
+
+          if (replyMercuryMsgId !== null) {
+            const trimmedWindow = Math.floor(windowSize / 2);
+            const anchored = this.db.getAnchoredContext(
+              spaceId,
+              replyMercuryMsgId,
+              replyChainDepth,
+              trimmedWindow,
+            );
+            anchorMessages = anchored.anchor;
+            history = anchored.recent;
+          } else {
+            history = this.db.getRecentTurns(spaceId, windowSize);
+          }
+
           // One-shot clear: reset temporary boundary immediately after reading history.
           this.db.resetClearBoundary(spaceId);
         } else {
           // Clear mode: only include reply chain if this message is a reply
-          if (
-            replyMeta?.replyToPlatformMessageId &&
-            replyMeta.platform &&
-            replyMeta.conversationExternalId
-          ) {
-            const mercuryMsgId = this.db.lookupMercuryMessageId(
-              replyMeta.platform,
-              replyMeta.conversationExternalId,
-              replyMeta.replyToPlatformMessageId,
+          if (replyMercuryMsgId !== null) {
+            history = this.db.getReplyChain(
+              replyMercuryMsgId,
+              replyChainDepth,
+              spaceId,
             );
-            if (mercuryMsgId !== null) {
-              const depthStr = this.db.getSpaceConfig(
-                spaceId,
-                "context.reply_chain_depth",
-              );
-              const depth = depthStr ? Number.parseInt(depthStr, 10) : 10;
-              history = this.db.getReplyChain(mercuryMsgId, depth);
-            } else {
-              history = []; // Message predates feature — no chain available
-            }
           } else {
-            history = []; // New independent message — no prior context
+            history = [];
           }
         }
-      }
-
-      // Resolve the Mercury message ID being replied to (if any)
-      let userReplyToId: number | undefined;
-      if (
-        replyMeta?.replyToPlatformMessageId &&
-        replyMeta.platform &&
-        replyMeta.conversationExternalId
-      ) {
-        const resolved = this.db.lookupMercuryMessageId(
-          replyMeta.platform,
-          replyMeta.conversationExternalId,
-          replyMeta.replyToPlatformMessageId,
-        );
-        if (resolved !== null) userReplyToId = resolved;
       }
 
       const userMessageId = this.db.addMessage(
@@ -1036,6 +1045,7 @@ export class MercuryCoreRuntime {
           spaceId,
           spaceWorkspace: workspace,
           messages: history,
+          anchorMessages,
           prompt: finalPrompt,
           callerId,
           callerRole,

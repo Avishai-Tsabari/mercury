@@ -730,12 +730,18 @@ export class Db {
    * maxDepth turns (each turn = user + assistant pair). Returns messages
    * in chronological order (oldest first).
    */
-  getReplyChain(messageId: number, maxDepth: number): StoredMessage[] {
+  getReplyChain(
+    messageId: number,
+    maxDepth: number,
+    spaceId?: string,
+  ): StoredMessage[] {
     const chain: StoredMessage[] = [];
     let currentId: number | null = messageId;
     const maxMessages = maxDepth * 2; // each turn = user + assistant
+    const boundary = spaceId ? this.getSessionBoundary(spaceId) : 0;
 
     while (currentId !== null && chain.length < maxMessages) {
+      if (currentId <= boundary) break;
       const row = this.db
         .query(
           `SELECT id, space_id as spaceId, role, content, attachments, run_meta as runMeta,
@@ -750,6 +756,24 @@ export class Db {
 
     // Reverse to chronological order (oldest first)
     return chain.reverse();
+  }
+
+  getAnchoredContext(
+    spaceId: string,
+    anchorMessageId: number,
+    replyChainDepth: number,
+    recentTurnCount: number,
+  ): { anchor: StoredMessage[]; recent: StoredMessage[] } {
+    const anchor = this.getReplyChain(
+      anchorMessageId,
+      replyChainDepth,
+      spaceId,
+    );
+    const anchorIds = new Set(anchor.map((m) => m.id));
+    const recent = this.getRecentTurns(spaceId, recentTurnCount).filter(
+      (m) => !anchorIds.has(m.id),
+    );
+    return { anchor, recent };
   }
 
   updateMessageRunMeta(messageId: number, meta: MessageRunMeta): void {

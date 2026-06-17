@@ -35,6 +35,7 @@ type Payload = {
   spaceId: string;
   spaceWorkspace: string;
   messages: StoredMessage[];
+  anchorMessages?: StoredMessage[];
   prompt: string;
   callerRole?: string;
   authorName?: string;
@@ -304,6 +305,11 @@ Your prompt may include \`<active_episodes>\` XML with time-bounded topics relev
   parts.push(mercuryPlatform);
   parts.push(buildCapabilitySection(caps, payload));
   parts.push(memory);
+  if (payload.anchorMessages && payload.anchorMessages.length > 0) {
+    parts.push(
+      `When a \`<reply_anchor>\` block appears in the user prompt, the user is swipe-replying to those specific messages. Address the anchor content directly.`,
+    );
+  }
 
   return parts.join("\n\n");
 }
@@ -558,6 +564,17 @@ function buildHistoryXml(messages: StoredMessage[]): string | null {
   return `<history>\n${entries.join("\n")}\n</history>`;
 }
 
+function buildAnchorXml(messages: StoredMessage[]): string | null {
+  if (!messages || messages.length === 0) return null;
+
+  const entries = messages.map((m) => {
+    const ts = formatContextTimestamp(m.createdAt);
+    return `  <message role="${m.role}" timestamp="${ts}">${escapeXmlText(m.content)}</message>`;
+  });
+
+  return `<reply_anchor>\n${entries.join("\n")}\n</reply_anchor>`;
+}
+
 function buildPrompt(payload: Payload): string {
   const parts: string[] = [];
 
@@ -624,7 +641,14 @@ function buildPrompt(payload: Payload): string {
     parts.push("");
   }
 
-  // 7. Current prompt
+  // 7. Reply anchor (reply chain the user is swipe-replying to)
+  const anchorXml = buildAnchorXml(payload.anchorMessages ?? []);
+  if (anchorXml) {
+    parts.push(anchorXml);
+    parts.push("");
+  }
+
+  // 8. Current prompt
   parts.push(payload.prompt);
 
   return parts.join("\n");

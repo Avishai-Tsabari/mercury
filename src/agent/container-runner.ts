@@ -598,6 +598,7 @@ export class AgentContainerRunner {
     spaceId: string;
     spaceWorkspace: string;
     messages: StoredMessage[];
+    anchorMessages?: StoredMessage[];
     prompt: string;
     callerId: string;
     callerRole?: string;
@@ -974,6 +975,7 @@ export class AgentContainerRunner {
     const payload = {
       ...input,
       messages: input.messages,
+      anchorMessages: input.anchorMessages,
       spaceWorkspace: input.spaceWorkspace
         .replace(spacesRoot, "/spaces")
         .replaceAll("\\", "/"),
