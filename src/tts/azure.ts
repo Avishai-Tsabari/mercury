@@ -36,7 +36,7 @@ export async function synthesizeAzure(opts: {
       "Content-Type": "application/ssml+xml",
       "X-Microsoft-OutputFormat": OUTPUT_FORMAT,
       "Ocp-Apim-Subscription-Key": opts.key.trim(),
-      "User-Agent": "mercury-ai-tts",
+      "User-Agent": "mercury-agent-tts",
     },
     body: ssml,
   });

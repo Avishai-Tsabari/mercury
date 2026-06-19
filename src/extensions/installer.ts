@@ -55,7 +55,7 @@ export function getGlobalDir(cwd: string): string {
   return join(cwd, getProjectDataDir(cwd), "global");
 }
 
-/** Path to `examples/extensions/<sourceDir>` inside the mercury-ai package. */
+/** Path to `examples/extensions/<sourceDir>` inside the mercury-agent package. */
 export function resolveExamplesExtensionDir(
   packageRoot: string,
   sourceDir: string,

@@ -39,7 +39,7 @@ export interface ServerContext {
   configRegistry: ConfigRegistry;
   /** Current Mercury project directory (usually `process.cwd()`). */
   projectRoot: string;
-  /** Root of the mercury-ai package (for bundled `examples/extensions`). */
+  /** Root of the mercury-agent package (for bundled `examples/extensions`). */
   packageRoot: string;
 }
 

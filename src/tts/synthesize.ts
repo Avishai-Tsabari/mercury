@@ -17,7 +17,7 @@ export class TtsConfigError extends Error {
   }
 }
 
-/** Subset of AppConfig used by TTS (extensions import via `mercury-ai/tts`). */
+/** Subset of AppConfig used by TTS (extensions import via `mercury-agent/tts`). */
 export interface MercuryTtsConfig {
   ttsProvider: "google" | "azure" | "auto";
   azureSpeechKey?: string;

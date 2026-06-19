@@ -1,6 +1,6 @@
 /**
  * Bundled extension catalog for dashboard install. Sources live under
- * `examples/extensions/<sourceDir>/` in the mercury-ai package (or repo).
+ * `examples/extensions/<sourceDir>/` in the mercury-agent package (or repo).
  */
 export type ExtensionCatalogCategory =
   | "browsing"

@@ -2451,7 +2451,7 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       return c.html(
         renderFeaturesToast(
           "error",
-          "Bundled extension source not found. Use a mercury-ai install that includes examples/, or run: mercury add <path>",
+          "Bundled extension source not found. Use a mercury-agent install that includes examples/, or run: mercury add <path>",
         ),
       );
     }

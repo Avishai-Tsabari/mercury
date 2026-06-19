@@ -62,7 +62,7 @@ gh release create v0.x.y --title "v0.x.y" --notes "## What's Changed
 ```
 
 CI publishes:
-- **npm**: `mercury-ai` package
+- **npm**: `mercury-agent` package
 - **Docker**: `ghcr.io/<owner>/mercury-agent:latest` and `ghcr.io/<owner>/mercury-agent:<version>` (both full and minimal variants)
 
 ## Structure

@@ -24,17 +24,17 @@ import type {
 const VALID_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 const __loaderDir = path.dirname(fileURLToPath(import.meta.url));
-/** Root of the mercury-ai package (parent of `src/`). */
+/** Root of the mercury-agent package (parent of `src/`). */
 const MERCURY_PACKAGE_ROOT = path.resolve(__loaderDir, "../..");
 
 /**
- * Ensure `<extensionsDir>/node_modules/mercury-ai` resolves to this framework
- * package so extensions can `import ... from "mercury-ai"` (e.g. `mercury-ai/tts`).
+ * Ensure `<extensionsDir>/node_modules/mercury-agent` resolves to this framework
+ * package so extensions can `import ... from "mercury-agent"` (e.g. `mercury-agent/tts`).
  */
 function ensurePackageLink(extensionsDir: string): void {
   const expectedRoot = path.resolve(MERCURY_PACKAGE_ROOT);
   const nmDir = path.join(extensionsDir, "node_modules");
-  const linkPath = path.join(nmDir, "mercury-ai");
+  const linkPath = path.join(nmDir, "mercury-agent");
 
   try {
     if (fs.existsSync(linkPath) && fs.realpathSync(linkPath) === expectedRoot) {

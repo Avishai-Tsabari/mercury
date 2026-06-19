@@ -25,7 +25,7 @@ The extension **name** is the directory name.
 Every extension exports a default function that receives the `MercuryExtensionAPI`:
 
 ```typescript
-import type { MercuryExtensionAPI } from "mercury-ai";
+import type { MercuryExtensionAPI } from "mercury-agent";
 
 export default function(mercury: MercuryExtensionAPI) {
   // Declare what this extension provides

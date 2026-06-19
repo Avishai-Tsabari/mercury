@@ -3,10 +3,10 @@ import path from "node:path";
 import type {
   MercuryExtensionAPI,
   MercuryExtensionContext,
-} from "mercury-ai/extensions/types";
-import type { MercuryTtsConfig } from "mercury-ai/tts";
-import { synthesizeSpeech } from "mercury-ai/tts";
-import type { EgressFile } from "mercury-ai/types";
+} from "mercury-agent/extensions/types";
+import type { MercuryTtsConfig } from "mercury-agent/tts";
+import { synthesizeSpeech } from "mercury-agent/tts";
+import type { EgressFile } from "mercury-agent/types";
 
 const EXT = "voice-synth";
 

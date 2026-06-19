@@ -2305,7 +2305,7 @@ extCommand
     // index.ts scaffold
     writeFileSync(
       join(extDir, "index.ts"),
-      `import type { MercuryExtensionAPI } from "mercury-ai";
+      `import type { MercuryExtensionAPI } from "mercury-agent";
 
 export default function (mercury: MercuryExtensionAPI) {
   // Register a skill for the AI agent

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Avishai-Tsabari/mercury"><img alt="GitHub" src="https://img.shields.io/badge/github-mercury-181717?style=flat-square&logo=github" /></a>
-  <a href="https://www.npmjs.com/package/mercury-ai"><img alt="npm" src="https://img.shields.io/npm/v/mercury-ai?style=flat-square&logo=npm" /></a>
+  <a href="https://www.npmjs.com/package/mercury-agent"><img alt="npm" src="https://img.shields.io/npm/v/mercury-agent?style=flat-square&logo=npm" /></a>
 </p>
 
 Mercury is a personal AI assistant that lives where you chat. It connects to WhatsApp, Slack, Discord, and Telegram, runs agents inside containers for isolation, and uses [pi](https://github.com/badlogic/pi) as the runtime.
@@ -24,7 +24,7 @@ Mercury is a personal AI assistant that lives where you chat. It connects to Wha
 ## Quick Start
 
 ```bash
-npm install -g mercury-ai
+npm install -g mercury-agent
 mkdir my-assistant && cd my-assistant
 mercury setup     # Interactive guided setup (recommended)
 # -- or for manual setup: --
