@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Avishai-Tsabari/your-ai-assistant"><img alt="GitHub" src="https://img.shields.io/badge/github-your--ai--assistant-181717?style=flat-square&logo=github" /></a>
+  <a href="https://github.com/Avishai-Tsabari/mercury"><img alt="GitHub" src="https://img.shields.io/badge/github-mercury-181717?style=flat-square&logo=github" /></a>
   <a href="https://www.npmjs.com/package/mercury-ai"><img alt="npm" src="https://img.shields.io/npm/v/mercury-ai?style=flat-square&logo=npm" /></a>
 </p>
 
