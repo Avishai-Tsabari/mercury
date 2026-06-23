@@ -11,4 +11,4 @@ resources/extensions/*
 .DS_Store
 .claude/
 .pi/
-feature-tracking.csv
+*.csv
