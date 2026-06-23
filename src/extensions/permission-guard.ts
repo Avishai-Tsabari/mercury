@@ -11,7 +11,7 @@
  * Set automatically by Mercury's runtime based on caller permissions.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
   const deniedEnv = process.env.MERCURY_DENIED_CLIS;

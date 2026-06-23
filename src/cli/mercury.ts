@@ -820,7 +820,7 @@ authCommand
   )
   .action(async (providerArg?: string) => {
     const { getOAuthProviders, getOAuthProvider } = await import(
-      "@mariozechner/pi-ai/oauth"
+      "@earendil-works/pi-ai/oauth"
     );
     const readline = await import("node:readline");
     const { exec } = await import("node:child_process");
@@ -913,6 +913,12 @@ authCommand
                 : "xdg-open";
           exec(`${openCmd} "${info.url}"`);
         },
+        onDeviceCode: (info: { userCode: string; verificationUri: string }) => {
+          console.log(
+            `\nOpen this URL in your browser:\n  ${info.verificationUri}`,
+          );
+          console.log(`Enter code: ${info.userCode}\n`);
+        },
         onPrompt: async (prompt: { message: string; placeholder?: string }) => {
           const answer = await new Promise<string>((resolve) => {
             rl.question(
@@ -921,6 +927,23 @@ authCommand
             );
           });
           return answer;
+        },
+        onSelect: async (prompt: {
+          message: string;
+          options: Array<{ id: string; label: string }>;
+        }) => {
+          console.log(`\n${prompt.message}`);
+          for (let i = 0; i < prompt.options.length; i++) {
+            console.log(`  ${i + 1}. ${prompt.options[i].label}`);
+          }
+          const answer = await new Promise<string>((resolve) => {
+            rl.question("Choose (number): ", resolve);
+          });
+          const idx = Number.parseInt(answer, 10) - 1;
+          if (idx >= 0 && idx < prompt.options.length) {
+            return prompt.options[idx].id;
+          }
+          return undefined;
         },
         onProgress: (message: string) => {
           console.log(message);
@@ -999,7 +1022,7 @@ authCommand
   .command("status")
   .description("Show authentication status for all providers")
   .action(async () => {
-    const { getOAuthProviders } = await import("@mariozechner/pi-ai/oauth");
+    const { getOAuthProviders } = await import("@earendil-works/pi-ai/oauth");
 
     const dataDir = getProjectDataDir(CWD);
     const authPath = join(CWD, dataDir, "global", "auth.json");

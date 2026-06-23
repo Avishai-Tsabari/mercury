@@ -4,7 +4,7 @@ import {
   getOAuthApiKey,
   type OAuthCredentials,
   type OAuthProviderId,
-} from "@mariozechner/pi-ai/oauth";
+} from "@earendil-works/pi-ai/oauth";
 import { logger } from "../logger.js";
 
 type AuthEntry =

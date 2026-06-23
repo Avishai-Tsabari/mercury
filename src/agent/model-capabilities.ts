@@ -4,7 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { getModels, type KnownProvider } from "@mariozechner/pi-ai";
+import { getModels, type KnownProvider } from "@earendil-works/pi-ai";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { ModelLeg } from "../config.js";

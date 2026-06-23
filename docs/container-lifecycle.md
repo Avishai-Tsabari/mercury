@@ -228,7 +228,7 @@ You can use custom Docker images via `MERCURY_AGENT_IMAGE`.
 
 Your image **must** have:
 - `bun` runtime
-- `pi` CLI (`@mariozechner/pi-coding-agent`)
+- `pi` CLI (`@earendil-works/pi-coding-agent`)
 - `bubblewrap` (for agent sandboxing)
 - `mrctl` wrapper (copied during build)
 Extension CLIs (e.g. `pinchtab`, `napkin`, `gws`) are installed in derived images at runtime based on `.mercury/extensions/*` declarations.
@@ -279,7 +279,7 @@ RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/home/mercury/.bun/bin:$PATH"
 
 # Install required CLIs
-RUN bun add -g @mariozechner/pi-coding-agent
+RUN bun add -g @earendil-works/pi-coding-agent
 
 # Optional: install Playwright/Chromium if your extensions need browser automation
 RUN bunx playwright install chromium
