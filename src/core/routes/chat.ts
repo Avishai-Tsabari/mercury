@@ -62,9 +62,16 @@ export function createChatRoute(core: MercuryCoreRuntime): Hono {
     const authorName =
       typeof body.authorName === "string" ? body.authorName.trim() : undefined;
 
+    if (!core.db.getSpace(spaceId)) {
+      return c.json({ error: "Space not found" }, 404);
+    }
+
     // Save incoming files to inbox/
     const attachments: MessageAttachment[] = [];
     if (Array.isArray(body.files)) {
+      if (body.files.length > 20) {
+        return c.json({ error: "Too many files (max 20)" }, 400);
+      }
       if (await isOverQuota(core.config)) {
         return c.json({ error: "Storage quota exceeded" }, 413);
       }
@@ -98,10 +105,6 @@ export function createChatRoute(core: MercuryCoreRuntime): Hono {
           });
         }
       }
-    }
-
-    if (!core.db.getSpace(spaceId)) {
-      return c.json({ error: "Space not found" }, 404);
     }
 
     if (authenticated) {

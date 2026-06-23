@@ -70,7 +70,14 @@ function loadEnvFile(envPath: string): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue;
     const match = trimmed.match(/^([^=]+)=(.*)$/);
     if (match) {
-      vars[match[1]] = match[2];
+      let value = match[2];
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      vars[match[1]] = value;
     }
   }
   return vars;
@@ -266,16 +273,14 @@ function statusAction(): void {
     `Configuration:   ${hasEnv ? "✓ .env exists" : "✗ .env missing (run 'mercury init')"}`,
   );
 
-  const imageCheck = spawnSync(
-    "docker",
-    ["image", "inspect", "mercury-agent:latest"],
-    {
-      stdio: "pipe",
-    },
-  );
+  const cfg = loadConfig();
+  const imageName = cfg.agentContainerImage;
+  const imageCheck = spawnSync("docker", ["image", "inspect", imageName], {
+    stdio: "pipe",
+  });
   const hasImage = imageCheck.status === 0;
   console.log(
-    `Container image: ${hasImage ? "✓ mercury-agent:latest" : "✗ not built (run 'mercury build')"}`,
+    `Container image: ${hasImage ? `✓ ${imageName}` : `✗ not available (run 'mercury build' or pull '${imageName}')`}`,
   );
 
   if (hasEnv) {
@@ -1747,7 +1752,7 @@ async function addAction(source: string): Promise<void> {
     }
 
     console.log("\nRestart mercury to activate:");
-    console.log("  mercury service restart");
+    console.log("  mercury service uninstall && mercury service install");
   } finally {
     cleanup();
   }
@@ -1762,7 +1767,7 @@ function removeAction(name: string): void {
 
   console.log(`✓ Extension "${name}" removed`);
   console.log("\nRestart mercury to apply:");
-  console.log("  mercury service restart");
+  console.log("  mercury service uninstall && mercury service install");
 }
 
 function extensionsListAction(): void {

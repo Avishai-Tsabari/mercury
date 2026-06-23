@@ -22,7 +22,7 @@ messages.get("/search", (c) => {
     if (!Number.isFinite(n) || n < 1) {
       return c.json({ error: "Invalid limit" }, 400);
     }
-    limit = n;
+    limit = Math.min(n, 200);
   }
 
   const found = db.searchMessages(spaceId, q, limit);

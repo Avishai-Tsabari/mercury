@@ -147,7 +147,7 @@ export class WhatsAppBaileysAdapter
   private readonly outgoingQueue: Array<{ jid: string; text: string }> = [];
   private flushing = false;
   private connectedAtMs = 0;
-  private readonly seenMessageIds = new Set<string>();
+  private seenMessageIds = new Set<string>();
   private reconnectAttempt = 0;
   private readonly pushNames = new Map<string, string>();
   private currentQr: string | null = null;
@@ -474,7 +474,10 @@ export class WhatsAppBaileysAdapter
     if (messageId) {
       if (this.seenMessageIds.has(messageId)) return;
       this.seenMessageIds.add(messageId);
-      if (this.seenMessageIds.size > 5000) this.seenMessageIds.clear();
+      if (this.seenMessageIds.size > 5000) {
+        const ids = [...this.seenMessageIds];
+        this.seenMessageIds = new Set(ids.slice(ids.length - 2500));
+      }
     }
 
     const tsMs = Number(msg.messageTimestamp ?? 0) * 1000;

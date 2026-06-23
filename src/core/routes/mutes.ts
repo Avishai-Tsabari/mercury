@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../api-types.js";
-import { getApiCtx, getAuth } from "../api-types.js";
+import { checkPerm, getApiCtx, getAuth } from "../api-types.js";
 import { parseMuteDuration } from "../mute-duration.js";
 
 export const mutes = new Hono<Env>();
@@ -8,6 +8,8 @@ export const mutes = new Hono<Env>();
 // ─── List mutes ─────────────────────────────────────────────────────────
 
 mutes.get("/", (c) => {
+  const denied = checkPerm(c, "mutes.list");
+  if (denied) return denied;
   const { spaceId } = getAuth(c);
   const { db } = getApiCtx(c);
   return c.json({ mutes: db.listMutes(spaceId) });
@@ -16,6 +18,8 @@ mutes.get("/", (c) => {
 // ─── Mute a user ────────────────────────────────────────────────────────
 
 mutes.post("/", async (c) => {
+  const denied = checkPerm(c, "mutes.mute");
+  if (denied) return denied;
   const { spaceId, callerId } = getAuth(c);
   const { db } = getApiCtx(c);
   const body = await c.req.json<{
@@ -76,6 +80,8 @@ mutes.post("/", async (c) => {
 // ─── Unmute a user ──────────────────────────────────────────────────────
 
 mutes.delete("/:userId", (c) => {
+  const denied = checkPerm(c, "mutes.unmute");
+  if (denied) return denied;
   const { spaceId } = getAuth(c);
   const { db } = getApiCtx(c);
   const targetUserId = decodeURIComponent(c.req.param("userId"));

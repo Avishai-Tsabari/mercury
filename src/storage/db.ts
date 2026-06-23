@@ -55,6 +55,7 @@ export class Db {
     this.db = new Database(dbPath, { create: true });
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
+    this.db.exec("PRAGMA busy_timeout = 5000;");
     this.migrate();
   }
 

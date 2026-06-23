@@ -361,7 +361,8 @@ describe("HookDispatcher — before_container", () => {
       },
       ctx,
     );
-    expect(result?.systemPrompt).toBe("survived");
+    expect(result?.block).toBeDefined();
+    expect(result?.block?.reason).toContain("fail");
   });
 
   it("collects promptAppend from single handler", async () => {

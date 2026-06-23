@@ -30,6 +30,10 @@ const BUILT_IN_PERMISSIONS = new Set([
   "media.purge",
   /** Host Text-to-Speech (/api/tts); admin-only by default. */
   "tts.synthesize",
+  /** Mute/unmute users and list mutes; admin-only by default. */
+  "mutes.list",
+  "mutes.mute",
+  "mutes.unmute",
 ]);
 
 // ---------------------------------------------------------------------------

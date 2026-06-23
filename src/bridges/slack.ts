@@ -133,12 +133,14 @@ export class SlackBridge implements PlatformBridge {
   ): Promise<void> {
     const parts = threadId.split(":");
     const channelId = parts.length >= 2 ? parts[1] : threadId;
+    const threadTs = parts.length >= 3 ? parts[2] : undefined;
 
     for (const file of files) {
       try {
         const buffer = fs.readFileSync(file.path);
         const form = new FormData();
         form.append("channel_id", channelId);
+        if (threadTs) form.append("thread_ts", threadTs);
         form.append("filename", file.filename);
         form.append(
           "file",

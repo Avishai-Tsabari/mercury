@@ -101,10 +101,17 @@ export class TaskScheduler {
     let updated = 0;
     for (const task of tasks) {
       if (!task.active || !task.cron) continue;
-      const correct = this.computeNextRun(
-        task.cron,
-        task.timezone ?? undefined,
-      );
+      let correct: number;
+      try {
+        correct = this.computeNextRun(task.cron, task.timezone ?? undefined);
+      } catch (err) {
+        logger.warn("Skipping task with invalid cron expression", {
+          taskId: task.id,
+          cron: task.cron,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
       if (correct !== task.nextRunAt) {
         this.db.updateTaskNextRun(task.id, correct);
         updated++;

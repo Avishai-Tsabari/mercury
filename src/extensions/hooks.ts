@@ -86,6 +86,11 @@ export class HookDispatcher {
         this.log.error(
           `Hook "before_container" handler failed: ${err instanceof Error ? err.message : String(err)}`,
         );
+        return {
+          block: {
+            reason: `Extension hook failed: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        };
       }
     }
 

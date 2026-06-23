@@ -33,6 +33,16 @@ roles.post("/", async (c) => {
   }
 
   const targetRole = body.role ?? "admin";
+  const VALID_ROLES = /^[a-z][a-z0-9_-]{0,31}$/;
+  if (!VALID_ROLES.test(targetRole)) {
+    return c.json(
+      {
+        error:
+          "Invalid role name. Use lowercase alphanumeric, hyphens, underscores (max 32 chars).",
+      },
+      400,
+    );
+  }
   db.setRole(spaceId, body.platformUserId, targetRole, callerId);
 
   return c.json({

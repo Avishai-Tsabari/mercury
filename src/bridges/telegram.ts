@@ -479,13 +479,21 @@ export class TelegramBridge implements PlatformBridge {
     const { chatId } = this.parseThreadId(threadId);
     const apiUrl = `${TELEGRAM_API_BASE}/bot${this.botToken}/editMessageText`;
     try {
+      let formatted: string;
+      try {
+        formatted = markdownToTelegramHtml(text);
+      } catch {
+        formatted = escapeHtml(text);
+      }
+      const truncated = truncateTelegramHtml(formatted, TELEGRAM_MESSAGE_LIMIT);
       const resp = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
           message_id: Number(messageId),
-          text: applyRtlDirection(normalizeChatMarkdown(text)),
+          text: applyRtlDirection(truncated),
+          parse_mode: "HTML",
         }),
       });
       if (!resp.ok) return false;

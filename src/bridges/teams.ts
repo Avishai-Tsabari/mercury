@@ -73,9 +73,11 @@ export class TeamsBridge implements PlatformBridge {
 
     const { externalId, isDM } = this.parseThread(threadId);
 
-    // Check reply-to-bot via raw activity
+    // Reply-to-bot detection: in DMs every reply is to the bot;
+    // in channels we cannot reliably determine the target, so default to false
+    // to avoid responding to conversations not directed at us.
     const raw = msg.raw as { replyToId?: string; id?: string } | undefined;
-    const isReplyToBot = Boolean(raw?.replyToId);
+    const isReplyToBot = isDM && Boolean(raw?.replyToId);
 
     return {
       platform: "teams",

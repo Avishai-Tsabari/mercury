@@ -62,18 +62,25 @@ export class DiscordBridge implements PlatformBridge {
         const inboxDir = path.join(workspace, "inbox");
         for (const att of rawAttachments) {
           if (!att.url) continue;
-          const type = mimeToMediaType(
-            att.mimeType || "application/octet-stream",
-          );
-          const result = await downloadMediaFromUrl(att.url, {
-            type,
-            mimeType: att.mimeType || "application/octet-stream",
-            filename: att.name,
-            expectedSizeBytes: att.size,
-            maxSizeBytes: ctx.media.maxSizeBytes,
-            outputDir: inboxDir,
-          });
-          if (result) attachments.push(result);
+          try {
+            const type = mimeToMediaType(
+              att.mimeType || "application/octet-stream",
+            );
+            const result = await downloadMediaFromUrl(att.url, {
+              type,
+              mimeType: att.mimeType || "application/octet-stream",
+              filename: att.name,
+              expectedSizeBytes: att.size,
+              maxSizeBytes: ctx.media.maxSizeBytes,
+              outputDir: inboxDir,
+            });
+            if (result) attachments.push(result);
+          } catch (err) {
+            logger.warn("Discord attachment download failed", {
+              filename: att.name,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
         }
       }
     }

@@ -242,7 +242,7 @@ async function loadExtension(
   }
 
   const api = new MercuryExtensionAPIImpl(name, extDir, db);
-  setup(api);
+  await setup(api);
   const meta = api.getMeta();
 
   if (meta.connection) {

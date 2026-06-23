@@ -106,7 +106,7 @@ export function routeInput(input: {
       .split(/\s+/);
     const category = rawCategory.toLowerCase();
     const verb = rawVerb?.toLowerCase() || undefined;
-    const arg = argParts.join(" ").trim().toLowerCase() || undefined;
+    const arg = argParts.join(" ").trim() || undefined;
     if (SLASH_COMMANDS.some((c) => c.name === category)) {
       return gateSlashCommand(
         input.db,
