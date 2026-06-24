@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import makeWASocket, {
   areJidsSameUser,
-  Browsers,
   DisconnectReason,
   fetchLatestWaWebVersion,
   jidDecode,
@@ -219,7 +218,11 @@ export class WhatsAppBaileysAdapter
         keys: makeCacheableSignalKeyStore(state.keys, waLogger),
       },
       logger: waLogger,
-      browser: Browsers.macOS("Chrome"),
+      browser: [
+        process.env.MERCURY_WHATSAPP_DEVICE_NAME || "Mercury",
+        "Chrome",
+        "22.0",
+      ],
     });
 
     sock.ev.on("creds.update", saveCreds);

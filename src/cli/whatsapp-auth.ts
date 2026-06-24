@@ -14,7 +14,6 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import makeWASocket, {
-  Browsers,
   DisconnectReason,
   fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
@@ -105,7 +104,11 @@ async function connectSocket(
     },
     printQRInTerminal: false,
     logger: silentLogger,
-    browser: Browsers.macOS("Chrome"),
+    browser: [
+      process.env.MERCURY_WHATSAPP_DEVICE_NAME || "Mercury",
+      "Chrome",
+      "22.0",
+    ],
   });
 
   if (usePairingCode && phoneNumber && !state.creds.me) {
