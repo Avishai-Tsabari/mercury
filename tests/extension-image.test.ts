@@ -386,11 +386,11 @@ describe("generateDockerfile", () => {
       }),
     ];
     const df = generateDockerfile(
-      "ghcr.io/michaelliv/mercury-agent:latest",
+      "ghcr.io/avishai-tsabari/mercury-agent:latest",
       exts,
     );
     expect(df).toContain("# syntax=docker/dockerfile:1");
-    expect(df).toContain("FROM ghcr.io/michaelliv/mercury-agent:latest");
+    expect(df).toContain("FROM ghcr.io/avishai-tsabari/mercury-agent:latest");
     expect(df).toContain("bun add -g napkin-ai");
   });
 

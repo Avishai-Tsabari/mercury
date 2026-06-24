@@ -176,8 +176,8 @@ Message received
 export MERCURY_CONTAINER_TIMEOUT_MS=600000
 
 # Use a preset image from GitHub Container Registry
-export MERCURY_AGENT_IMAGE=ghcr.io/michaelliv/mercury-agent:latest   # Full (default)
-export MERCURY_AGENT_IMAGE=ghcr.io/michaelliv/mercury-agent:minimal  # Lightweight
+export MERCURY_AGENT_IMAGE=ghcr.io/avishai-tsabari/mercury-agent:latest   # Full (default)
+export MERCURY_AGENT_IMAGE=ghcr.io/avishai-tsabari/mercury-agent:minimal  # Lightweight
 ```
 
 ## Sandboxing (Bubblewrap)
@@ -204,8 +204,8 @@ Mercury publishes two image presets to GitHub Container Registry:
 
 | Preset | Size | Contents |
 |--------|------|----------|
-| `ghcr.io/michaelliv/mercury-agent:latest` | ~2.8GB | Full devcontainer: Bun, Node.js, Python, Go, git, build tools |
-| `ghcr.io/michaelliv/mercury-agent:minimal` | ~1.9GB | Lightweight runtime: Bun + pi + Chromium deps |
+| `ghcr.io/avishai-tsabari/mercury-agent:latest` | ~2.8GB | Full devcontainer: Bun, Node.js, Python, Go, git, build tools |
+| `ghcr.io/avishai-tsabari/mercury-agent:minimal` | ~1.9GB | Lightweight runtime: Bun + pi + Chromium deps |
 
 Images are published on each release. Version-specific tags are also available (e.g., `:0.2.0`, `:0.2.0-minimal`).
 

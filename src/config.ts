@@ -118,7 +118,7 @@ const schema = z.object({
   // ─── Container / Agent ──────────────────────────────────────────────
   agentContainerImage: z
     .string()
-    .default("ghcr.io/michaelliv/mercury-agent:latest"),
+    .default("ghcr.io/avishai-tsabari/mercury-agent:latest"),
   containerTimeoutMs: z.coerce
     .number()
     .int()

@@ -3,7 +3,7 @@
 # Extends Base with: python3 + pip + venv, build-essential, jq, ffmpeg, bubblewrap
 # The patch script, mrctl, and entrypoint are all inherited from Base — not duplicated here.
 ARG BASE_TAG
-FROM ghcr.io/michaelliv/mercury-agent:${BASE_TAG}-base
+FROM ghcr.io/avishai-tsabari/mercury-agent:${BASE_TAG}-base
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \

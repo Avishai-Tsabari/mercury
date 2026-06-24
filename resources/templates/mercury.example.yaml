@@ -57,7 +57,7 @@
 #   # auto_compact_threshold: 50
 
 # agent:
-#   image: ghcr.io/michaelliv/mercury-agent:latest
+#   image: ghcr.io/avishai-tsabari/mercury-agent:latest
 #   container_timeout_ms: 300000
 #   container_bwrap_docker_compat: false
 
