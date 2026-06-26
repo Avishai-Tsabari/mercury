@@ -238,10 +238,9 @@ function buildAction(): void {
       );
       process.exit(1);
     }
-    cpSync(resourcesSrc, resourcesDest, {
-      recursive: true,
-      filter: (src) => !src.split(/[\\/]/).includes("node_modules"),
-    });
+    // Bun's cpSync with a filter callback silently fails on Windows —
+    // use without filter; node_modules exclusion is only needed in dev.
+    cpSync(resourcesSrc, resourcesDest, { recursive: true });
     if (!existsSync(resourcesDest)) {
       console.error(`❌ Failed to copy resources/ into build context`);
       console.error(`   Source: ${resourcesSrc} (exists: ${existsSync(resourcesSrc)})`);
