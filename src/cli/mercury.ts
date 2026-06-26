@@ -229,18 +229,33 @@ function buildAction(): void {
       copyFileSync(src, dest);
     }
 
-    cpSync(join(PACKAGE_ROOT, "resources"), join(tmpDir, "resources"), {
+    const resourcesSrc = join(PACKAGE_ROOT, "resources");
+    const resourcesDest = join(tmpDir, "resources");
+    if (!existsSync(resourcesSrc)) {
+      console.error(`❌ resources/ not found at ${resourcesSrc}`);
+      console.error(
+        "The installed package may be corrupt. Try: npm install -g mercury-agent",
+      );
+      process.exit(1);
+    }
+    cpSync(resourcesSrc, resourcesDest, {
       recursive: true,
       filter: (src) => !src.split(/[\\/]/).includes("node_modules"),
     });
+    if (!existsSync(resourcesDest)) {
+      console.error(`❌ Failed to copy resources/ into build context`);
+      console.error(`   Source: ${resourcesSrc} (exists: ${existsSync(resourcesSrc)})`);
+      console.error(`   Dest:   ${resourcesDest}`);
+      process.exit(1);
+    }
 
-    cpSync(
-      join(PACKAGE_ROOT, "examples", "extensions"),
-      join(tmpDir, "examples", "extensions"),
-      { recursive: true },
-    );
+    const examplesSrc = join(PACKAGE_ROOT, "examples", "extensions");
+    const examplesDest = join(tmpDir, "examples", "extensions");
+    cpSync(examplesSrc, examplesDest, { recursive: true });
 
-    console.log("📦 Building container image...\n");
+    console.log(`📦 Building container image...`);
+    console.log(`   Package root: ${PACKAGE_ROOT}`);
+    console.log(`   Build context: ${tmpDir}\n`);
     const result = spawnSync(
       "docker",
       [
