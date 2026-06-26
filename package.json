@@ -1,6 +1,6 @@
 {
   "name": "mercury-agent",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "description": "Personal AI assistant for chat platforms (WhatsApp, Slack, Discord, Telegram)",
   "license": "MIT",
   "author": "Avishai Tsabari",
