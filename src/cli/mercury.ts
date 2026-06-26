@@ -185,13 +185,30 @@ async function runAction(): Promise<void> {
     stdio: "pipe",
   });
   if (imageCheck.status !== 0) {
-    console.error(`Error: Container image '${imageName}' not found.`);
-    if (imageName.startsWith("ghcr.io/")) {
-      console.error(`Run 'docker pull ${imageName}' to pull it.`);
+    // If the configured (registry) image isn't available, try the local build tag
+    const localTag = "mercury-agent:latest";
+    if (imageName !== localTag) {
+      const localCheck = spawnSync("docker", ["image", "inspect", localTag], {
+        stdio: "pipe",
+      });
+      if (localCheck.status === 0) {
+        console.log(
+          `ℹ️  Registry image not found, using locally built ${localTag}\n`,
+        );
+        process.env.MERCURY_AGENT_IMAGE = localTag;
+      } else {
+        console.error(`Error: Container image '${imageName}' not found.`);
+        console.error(
+          `Pull it:  docker pull ${imageName}\n` +
+            `Or build: mercury build`,
+        );
+        process.exit(1);
+      }
     } else {
+      console.error(`Error: Container image '${imageName}' not found.`);
       console.error("Run 'mercury build' to build it.");
+      process.exit(1);
     }
-    process.exit(1);
   }
 
   console.log("🪽 Starting mercury...\n");
