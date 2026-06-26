@@ -385,6 +385,22 @@ const PACKAGE_ROOT = path.join(__dirname, "../..");
 /** Exit code 137 = SIGKILL (128 + 9), typically from OOM killer */
 const OOM_EXIT_CODE = 137;
 
+let _isDockerDesktop: boolean | undefined;
+function isDockerDesktop(): boolean {
+  if (_isDockerDesktop !== undefined) return _isDockerDesktop;
+  try {
+    const info = execFileSync("docker", ["info", "--format", "{{.Name}}"], {
+      encoding: "utf8",
+      timeout: 10_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    _isDockerDesktop = info === "docker-desktop";
+  } catch {
+    _isDockerDesktop = false;
+  }
+  return _isDockerDesktop;
+}
+
 export class AgentContainerRunner {
   // Inner containers now run detached (no long-lived `docker` child process to
   // hold a handle to), so we track only the container name — termination is by
@@ -934,7 +950,7 @@ export class AgentContainerRunner {
         "-e",
         "CONTAINER_RUNTIME=runsc",
       );
-    } else if (this.config.containerBwrapDockerCompat) {
+    } else if (this.config.containerBwrapDockerCompat || isDockerDesktop()) {
       // runc + bwrap: bubblewrap needs extra namespace syscalls that Docker's default
       // seccomp/caps/AppArmor block. seccomp=unconfined allows unshare; apparmor=unconfined
       // allows mount(MS_SLAVE); SYS_ADMIN grants the mount capability. Bwrap remains active

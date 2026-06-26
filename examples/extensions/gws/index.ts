@@ -44,7 +44,7 @@ type MercuryExt = {
   ): void;
 };
 
-import manifest from "../../../resources/connection-env-vars.json";
+import manifest from "mercury-agent/resources/connection-env-vars.json";
 
 const gwsEnv = manifest.gws;
 
