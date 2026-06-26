@@ -483,7 +483,9 @@ export class AgentContainerRunner {
         logger.info("Agent image pulled successfully", { image });
       } catch {
         throw new Error(
-          `Failed to pull agent image: ${image}\nRun manually: docker pull ${image}`,
+          `Failed to pull agent image: ${image}\n` +
+            `Build it locally with: mercury build\n` +
+            `Or pull manually: docker pull ${image}`,
         );
       }
     }
