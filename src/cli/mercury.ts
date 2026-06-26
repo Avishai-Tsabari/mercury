@@ -10,6 +10,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -36,6 +37,19 @@ const CWD = process.cwd();
 const TEMPLATES_DIR = join(PACKAGE_ROOT, "resources/templates");
 const PROFILES_DIR = join(PACKAGE_ROOT, "resources/profiles");
 const VALID_EXT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+function copyDirRecursive(src: string, dest: string): void {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src)) {
+    const srcPath = join(src, entry);
+    const destPath = join(dest, entry);
+    if (statSync(srcPath).isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+}
 
 function isPortInUse(port: string): boolean {
   if (process.platform === "win32") {
@@ -238,9 +252,8 @@ function buildAction(): void {
       );
       process.exit(1);
     }
-    // Bun's cpSync with a filter callback silently fails on Windows —
-    // use without filter; node_modules exclusion is only needed in dev.
-    cpSync(resourcesSrc, resourcesDest, { recursive: true });
+    // Bun's cpSync is broken on Windows — use manual recursive copy.
+    copyDirRecursive(resourcesSrc, resourcesDest);
     if (!existsSync(resourcesDest)) {
       console.error(`❌ Failed to copy resources/ into build context`);
       console.error(`   Source: ${resourcesSrc} (exists: ${existsSync(resourcesSrc)})`);
@@ -250,7 +263,7 @@ function buildAction(): void {
 
     const examplesSrc = join(PACKAGE_ROOT, "examples", "extensions");
     const examplesDest = join(tmpDir, "examples", "extensions");
-    cpSync(examplesSrc, examplesDest, { recursive: true });
+    copyDirRecursive(examplesSrc, examplesDest);
 
     console.log(`📦 Building container image...`);
     console.log(`   Package root: ${PACKAGE_ROOT}`);
