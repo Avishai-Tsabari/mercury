@@ -364,6 +364,7 @@ export function mergeRawMercuryConfig(
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`Failed to read mercury config ${configPath}: ${msg}`);
     }
+    if (rawYaml == null) rawYaml = {};
     const parsed = mercuryFileSchema.safeParse(rawYaml);
     if (!parsed.success) {
       const issues = parsed.error.issues
