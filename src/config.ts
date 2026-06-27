@@ -83,7 +83,7 @@ const schema = z.object({
   modelCapabilitiesEnv: z.string().optional(),
 
   // ─── Trigger Behavior ───────────────────────────────────────────────
-  triggerPatterns: z.string().default("@Pi,Pi"),
+  triggerPatterns: z.string().default("@Mercury,Mercury"),
   triggerMatch: z.string().default("mention"),
 
   // ─── Context Behavior ───────────────────────────────────────────────
