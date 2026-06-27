@@ -44,9 +44,13 @@ type MercuryExt = {
   ): void;
 };
 
-import manifest from "mercury-agent/resources/connection-env-vars.json";
-
-const gwsEnv = manifest.gws;
+const gwsEnv = {
+  credentialEnvVar: "MERCURY_GWS_CREDENTIALS_JSON",
+  env: {
+    credentials: "MERCURY_GWS_CREDENTIALS_JSON",
+    legacyCredentialsFile: "MERCURY_GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+  },
+};
 
 /** Path where credentials are materialized inside the inner container's own /tmp. */
 const CREDENTIALS_FILE = "/tmp/gws-credentials.json";

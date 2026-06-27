@@ -30,9 +30,13 @@ type MercuryExt = {
   }): void;
 };
 
-import manifest from "mercury-agent/resources/connection-env-vars.json";
-
-const yahooEnv = manifest["yahoo-mail"];
+const yahooEnv = {
+  credentialEnvVar: "MERCURY_YAHOO_APP_PASSWORD",
+  env: {
+    email: "MERCURY_YAHOO_EMAIL",
+    appPassword: "MERCURY_YAHOO_APP_PASSWORD",
+  },
+};
 
 export default function (mercury: MercuryExt) {
   mercury.cli({
