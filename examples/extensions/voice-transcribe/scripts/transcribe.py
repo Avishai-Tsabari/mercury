@@ -117,7 +117,7 @@ def _run_transformers(audio_path: str, model_id: str) -> str:
         model=model_id,
         device=device,
     )
-    result = pipe(audio_path)
+    result = pipe(audio_path, return_timestamps=True)
     if isinstance(result, dict):
         return (result.get("text") or "").strip()
     return str(result).strip()
