@@ -1,4 +1,4 @@
-import { execFileSync, execSync, spawn } from "node:child_process";
+import { execFileSync, execSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path, { dirname } from "node:path";
@@ -389,12 +389,13 @@ let _isDockerDesktop: boolean | undefined;
 function isDockerDesktop(): boolean {
   if (_isDockerDesktop !== undefined) return _isDockerDesktop;
   try {
-    const info = execFileSync("docker", ["info", "--format", "{{.Name}}"], {
+    const result = spawnSync("docker", ["info", "--format", "{{.Name}}"], {
       encoding: "utf8",
       timeout: 10_000,
       stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    _isDockerDesktop = info === "docker-desktop";
+    });
+    const info = (result.stdout ?? "").trim();
+    _isDockerDesktop = result.status === 0 && info === "docker-desktop";
   } catch {
     _isDockerDesktop = false;
   }
@@ -951,10 +952,10 @@ export class AgentContainerRunner {
         "CONTAINER_RUNTIME=runsc",
       );
     } else if (this.config.containerBwrapDockerCompat || isDockerDesktop()) {
-      // runc + bwrap: bubblewrap needs extra namespace syscalls that Docker's default
-      // seccomp/caps/AppArmor block. seccomp=unconfined allows unshare; apparmor=unconfined
-      // allows mount(MS_SLAVE); SYS_ADMIN grants the mount capability. Bwrap remains active
-      // inside the container; only the outer Docker layer is relaxed.
+      logger.info("Enabling bwrap Docker compat (seccomp/apparmor/SYS_ADMIN)", {
+        configFlag: this.config.containerBwrapDockerCompat,
+        dockerDesktop: isDockerDesktop(),
+      });
       args.push(
         "--security-opt",
         "seccomp=unconfined",
