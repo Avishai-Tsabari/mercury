@@ -40,6 +40,7 @@ const VALID_EXT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 function copyDirRecursive(src: string, dest: string): void {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src)) {
+    if (entry === "node_modules") continue;
     const srcPath = join(src, entry);
     const destPath = join(dest, entry);
     if (statSync(srcPath).isDirectory()) {
@@ -233,6 +234,7 @@ async function runAction(): Promise<void> {
 function buildAction(): void {
   // Build from package sources using a temp context — no files needed in user project
   const tmpDir = join(CWD, ".mercury", ".build-context");
+  rmSync(tmpDir, { recursive: true, force: true });
   mkdirSync(tmpDir, { recursive: true });
 
   try {
