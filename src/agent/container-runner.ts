@@ -394,8 +394,34 @@ function isDockerDesktop(): boolean {
       timeout: 10_000,
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const info = (result.stdout ?? "").trim();
-    _isDockerDesktop = result.status === 0 && info === "docker-desktop";
+    const name = (result.stdout ?? "").trim();
+    const stderr = (result.stderr ?? "").trim();
+    if (name === "docker-desktop") {
+      _isDockerDesktop = true;
+    } else {
+      // Fallback: check Docker context or server OS for Docker Desktop indicators
+      const ctxResult = spawnSync(
+        "docker",
+        ["info", "--format", "{{.OperatingSystem}}"],
+        { encoding: "utf8", timeout: 10_000, stdio: ["pipe", "pipe", "pipe"] },
+      );
+      const os = (ctxResult.stdout ?? "").trim();
+      _isDockerDesktop =
+        os.includes("Docker Desktop") || os.includes("Docker for Windows");
+      if (_isDockerDesktop) {
+        logger.info("Docker Desktop detected via OperatingSystem field", {
+          name,
+          os,
+        });
+      } else {
+        logger.debug("Docker Desktop not detected", {
+          name,
+          os,
+          exitCode: result.status,
+          stderr: stderr.slice(0, 200),
+        });
+      }
+    }
   } catch {
     _isDockerDesktop = false;
   }
