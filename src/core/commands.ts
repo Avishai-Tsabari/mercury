@@ -30,6 +30,40 @@ export const SLASH_COMMANDS: CommandEntry[] = [
       },
     ],
   },
+  {
+    name: "spaces",
+    description: "create, list, switch, and delete spaces",
+    verbs: [
+      { verb: "list", description: "list all spaces with conversation counts" },
+      {
+        verb: "create",
+        args: "<id> <name>",
+        description: "create a new space",
+      },
+      {
+        verb: "switch",
+        args: "<id>",
+        description: "switch this conversation to a different space",
+      },
+      {
+        verb: "delete",
+        args: "<id>",
+        description: "delete a space (requires confirmation)",
+      },
+      {
+        verb: "unlink",
+        description: "unlink this conversation from its space",
+      },
+    ],
+  },
+  {
+    name: "pause",
+    description: "pause the bot in this space (optional: /pause <duration>)",
+  },
+  {
+    name: "resume",
+    description: "resume the bot in this space",
+  },
 ];
 
 // Legacy bare commands — still work without a slash; shown in /help for discoverability.

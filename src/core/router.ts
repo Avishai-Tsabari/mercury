@@ -25,6 +25,8 @@ export type RouteResult =
   | { type: "denied"; reason: string }
   | { type: "ignore" };
 
+const SEEDED_ADMIN_COMMANDS = new Set(["spaces"]);
+
 /**
  * Chat-level commands that bypass the LLM.
  * Mapped to the permission required to execute them.
@@ -115,6 +117,7 @@ export function routeInput(input: {
         role,
         input.callerId,
         input.isDM,
+        seededAdmins,
         verb,
         arg,
       );
@@ -152,9 +155,19 @@ function gateSlashCommand(
   role: string,
   callerId: string,
   isDM: boolean,
+  seededAdmins: string[],
   verb?: string,
   arg?: string,
 ): RouteResult {
+  if (SEEDED_ADMIN_COMMANDS.has(command)) {
+    if (!seededAdmins.includes(callerId)) {
+      return {
+        type: "denied",
+        reason: `You don't have permission to use '/${command}'.`,
+      };
+    }
+    return { type: "command", command, verb, arg, callerId, role };
+  }
   if (!isDM && role !== "admin" && role !== "system") {
     return {
       type: "denied",

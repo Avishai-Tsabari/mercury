@@ -197,6 +197,15 @@ export class Db {
 
       CREATE INDEX IF NOT EXISTS idx_mpi_mercury_id
       ON message_platform_ids(mercury_message_id);
+
+      CREATE TABLE IF NOT EXISTS daily_rate_usage (
+        space_id TEXT NOT NULL,
+        platform_user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (space_id, platform_user_id, date)
+      );
     `);
     this.ensureMessagesRunMetaColumn();
     this.ensureChatStateClearBoundaryColumn();
@@ -385,6 +394,7 @@ export class Db {
       config: number;
       preferences: number;
       tokenUsage: number;
+      dailyRateUsage: number;
       conversationsUnlinked: number;
     };
   } {
@@ -395,6 +405,12 @@ export class Db {
           "DELETE FROM message_platform_ids WHERE mercury_message_id IN (SELECT id FROM messages WHERE space_id = ?)",
         )
         .run(spaceId);
+      this.db
+        .query("DELETE FROM extension_state WHERE space_id = ?")
+        .run(spaceId);
+      const dailyRateUsage = this.db
+        .query("DELETE FROM daily_rate_usage WHERE space_id = ?")
+        .run(spaceId).changes;
       const messages = this.db
         .query("DELETE FROM messages WHERE space_id = ?")
         .run(spaceId).changes;
@@ -436,6 +452,7 @@ export class Db {
           config,
           preferences,
           tokenUsage,
+          dailyRateUsage,
           conversationsUnlinked: Number(conversationsUnlinked?.count ?? 0),
         },
       };
@@ -1520,6 +1537,51 @@ export class Db {
       reason: r.reason,
       mutedBy: r.muted_by,
     }));
+  }
+
+  // ─── Daily Rate Usage ─────────────────────────────────────────────────
+
+  checkAndIncrementDailyUsage(
+    spaceId: string,
+    userId: string,
+    limit: number,
+  ): { allowed: boolean; count: number } {
+    const today = new Date().toISOString().slice(0, 10);
+    const now = Date.now();
+
+    this.db
+      .query(
+        "DELETE FROM daily_rate_usage WHERE space_id = ? AND platform_user_id = ? AND date < ?",
+      )
+      .run(spaceId, userId, today);
+
+    // Atomic: insert with count=1 if no row exists, or increment only if under limit.
+    const result = this.db
+      .query(
+        `INSERT INTO daily_rate_usage (space_id, platform_user_id, date, count, updated_at)
+         VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT(space_id, platform_user_id, date)
+         DO UPDATE SET count = count + 1, updated_at = excluded.updated_at
+         WHERE count < ?`,
+      )
+      .run(spaceId, userId, today, now, limit);
+
+    if (result.changes > 0) {
+      const row = this.db
+        .query(
+          "SELECT count FROM daily_rate_usage WHERE space_id = ? AND platform_user_id = ? AND date = ?",
+        )
+        .get(spaceId, userId, today) as { count: number };
+      return { allowed: true, count: row.count };
+    }
+
+    // No changes = either at limit or above
+    const row = this.db
+      .query(
+        "SELECT count FROM daily_rate_usage WHERE space_id = ? AND platform_user_id = ? AND date = ?",
+      )
+      .get(spaceId, userId, today) as { count: number } | null;
+    return { allowed: false, count: row?.count ?? 0 };
   }
 
   // ─── Token Usage ──────────────────────────────────────────────────────

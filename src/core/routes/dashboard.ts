@@ -1123,10 +1123,12 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       </form>
     `;
 
+    const isPaused = core.db.getSpaceConfig(spaceId, "paused") === "true";
+
     return c.html(html`
       <div class="page-header">
         <a href="#" hx-get="/dashboard/page/spaces" hx-target="#main" hx-push-url="true" class="back">← Back</a>
-        <h2>${escapeHtml(group.name)}</h2>
+        <h2>${escapeHtml(group.name)}${isPaused ? raw(' <span class="badge" style="background:var(--color-warning);color:var(--bg);font-size:11px;vertical-align:middle">⏸ Paused</span>') : ""}</h2>
       </div>
 
       <div class="grid-2">

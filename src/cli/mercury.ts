@@ -4,7 +4,6 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -814,7 +813,7 @@ program
         if (existsSync(profileExtDir)) {
           const userExtDir = join(CWD, ".mercury/extensions");
           mkdirSync(userExtDir, { recursive: true });
-          cpSync(profileExtDir, userExtDir, { recursive: true });
+          copyDirRecursive(profileExtDir, userExtDir);
         }
       }
     }
@@ -2112,7 +2111,7 @@ profilesCommand
     // Copy extensions
     const userExtDir = join(CWD, ".mercury/extensions");
     if (existsSync(userExtDir)) {
-      cpSync(userExtDir, join(absOutput, "extensions"), { recursive: true });
+      copyDirRecursive(userExtDir, join(absOutput, "extensions"));
     }
 
     // Generate manifest

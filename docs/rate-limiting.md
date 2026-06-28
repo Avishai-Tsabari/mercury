@@ -11,15 +11,19 @@ Message received
   │
   ├─► Type = "assistant"?
   │     │
-  │     ├─► Check rate limit
-  │     │     • Key: spaceId:userId
-  │     │     • Count requests in sliding window
-  │     │     • Compare against effective limit
+  │     ├─► Daily role check (if rate_limit.<role> key set and > 0)
+  │     │     • SQLite counter (space_id + user_id + UTC date)
+  │     │     • Denied: "You've used N/M messages today. Resets in Xh."
   │     │
-  │     ├─► Under limit → record request → continue
-  │     └─► Over limit → return "Rate limit exceeded"
+  │     ├─► Burst check (sliding window, always runs)
+  │     │     • In-memory, key: spaceId:userId
+  │     │     • Count requests in 60s window
+  │     │     • Denied: "Rate limit exceeded. Try again shortly."
+  │     │
+  │     ├─► Both pass → continue to container
+  │     └─► Either fails → return denial
   │
-  └─► Type = "command" / "ignore" → bypass rate limit
+  └─► Type = "command" / "ignore" → bypass rate limits
 ```
 
 Commands like `stop` and `compact` bypass rate limiting so users can always abort runaway containers.
@@ -159,6 +163,65 @@ The system prompt instructs the agent to:
 - The agent can mute proactively without an admin asking
 
 Mutes are per-space and expire automatically after the specified duration.
+
+## Role-Based Daily Limits
+
+In addition to the burst limiter, spaces can set per-role daily message caps. This gives agent owners cost control — admins get unlimited access to their own bot while capping how much others can use it.
+
+### Configuration
+
+Set `rate_limit.<role>` keys via `mrctl` or the API:
+
+```bash
+# Admins: unlimited (0 = no daily limit)
+mrctl config set rate_limit.admin 0
+
+# Members: 5 messages per day
+mrctl config set rate_limit.member 5
+```
+
+Via API:
+```bash
+curl -X PUT http://localhost:8787/api/config \
+  -H "X-Mercury-Space: slack:C123" \
+  -H "X-Mercury-Caller: slack:U456" \
+  -H "Content-Type: application/json" \
+  -d '{"key": "rate_limit.member", "value": "5"}'
+```
+
+### Behavior
+
+| Value | Effect |
+|-------|--------|
+| `0` | Unlimited (daily check skipped for this role) |
+| `> 0` | Daily cap enforced; denied requests show count + reset time |
+| Not set | No daily limit for this role (burst limiter still applies) |
+| Invalid (NaN) | Treated as "not set" |
+
+### How the two layers interact
+
+```
+Message arrives (type = "assistant")
+  │
+  ├─► Daily role check (if rate_limit.<role> key exists and > 0)
+  │     • Key: space_id + user_id + UTC date
+  │     • SQLite counter (persists across restarts)
+  │     • Denied: "You've used 5/5 messages today. Resets in 3h."
+  │
+  └─► Burst check (sliding window, always runs for all users)
+        • In-memory timestamps
+        • Denied: "Rate limit exceeded. Try again shortly."
+```
+
+Both layers are independent — both must pass. A user can be allowed by the daily check but blocked by the burst limiter, or vice versa. Denied requests do not increment the daily counter.
+
+### Special cases
+
+- **System callers** (scheduled tasks): exempt from daily limits unconditionally
+- **Commands** (`stop`, `compact`, etc.): bypass both layers
+- **Custom roles**: set `rate_limit.<custom_role>` for any role name
+- **Daily reset**: counters reset at UTC midnight
+- **Counters are per-space**: each space tracks independently
 
 ## See Also
 

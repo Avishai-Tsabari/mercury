@@ -69,6 +69,8 @@ export class MercuryCoreRuntime {
   private extensionCtx: MercuryExtensionContext | null = null;
   private extensionRegistry: ExtensionRegistry | null = null;
   private readonly shutdownHooks: ShutdownHook[] = [];
+  private readonly pauseTimers = new Map<string, NodeJS.Timeout>();
+  private messageSender: MessageSender | undefined;
   private shuttingDown = false;
   private signalHandlersInstalled = false;
 
@@ -272,6 +274,8 @@ export class MercuryCoreRuntime {
   }
 
   startScheduler(sender?: MessageSender): void {
+    this.messageSender = sender;
+    this.restorePauseTimers();
     this.scheduler.start(async (task) => {
       const result = await this.executePrompt(
         task.spaceId,
@@ -316,6 +320,8 @@ export class MercuryCoreRuntime {
 
   stopScheduler(): void {
     this.scheduler.stop();
+    for (const t of this.pauseTimers.values()) clearTimeout(t);
+    this.pauseTimers.clear();
   }
 
   async handleRawInput(
@@ -335,6 +341,34 @@ export class MercuryCoreRuntime {
       authorName: message.authorName,
     });
 
+    const pendingDeleteResult = this.handlePendingSpaceDelete(
+      message.spaceId,
+      message.callerId,
+      message.text.trim().toLowerCase(),
+    );
+    if (pendingDeleteResult) {
+      return {
+        type: "command",
+        command: "spaces",
+        callerId: message.callerId,
+        role:
+          route.type === "command" || route.type === "assistant"
+            ? route.role
+            : "admin",
+        result: { reply: pendingDeleteResult, files: [] },
+      };
+    }
+
+    // Pause guard — drop everything except /pause and /resume when paused
+    if (this.db.getSpaceConfig(message.spaceId, "paused") === "true") {
+      const exempt =
+        route.type === "command" &&
+        (route.command === "pause" || route.command === "resume");
+      if (!exempt) {
+        return { type: "ignore" };
+      }
+    }
+
     if (route.type === "command") {
       const reply = await this.executeCommand(
         message.spaceId,
@@ -342,6 +376,10 @@ export class MercuryCoreRuntime {
         route.callerId,
         route.verb,
         route.arg,
+        {
+          platform: message.platform,
+          externalId: message.conversationExternalId,
+        },
       );
       return { ...route, result: { reply, files: [] } };
     }
@@ -356,7 +394,33 @@ export class MercuryCoreRuntime {
 
     // Check rate limit for assistant requests (not commands, not ignored messages)
     if (route.type === "assistant") {
-      // Check per-group override first
+      // Daily role-based rate check (before burst limiter)
+      if (route.role !== "system") {
+        const roleKey = `rate_limit.${route.role}`;
+        const roleLimitRaw = this.db.getSpaceConfig(message.spaceId, roleKey);
+        if (roleLimitRaw !== null) {
+          const roleLimit = Number.parseInt(roleLimitRaw, 10);
+          if (!Number.isNaN(roleLimit) && roleLimit > 0) {
+            const daily = this.db.checkAndIncrementDailyUsage(
+              message.spaceId,
+              message.callerId,
+              roleLimit,
+            );
+            if (!daily.allowed) {
+              const msUntilReset =
+                new Date().setUTCHours(24, 0, 0, 0) - Date.now();
+              const hoursLeft = Math.ceil(msUntilReset / 3_600_000);
+              return {
+                type: "denied",
+                reason: `You've used ${daily.count}/${roleLimit} messages today. Resets in ${hoursLeft}h.`,
+              };
+            }
+          }
+          // roleLimit === 0 means unlimited — skip daily check
+        }
+      }
+
+      // Burst rate limit (sliding window)
       const groupLimit = this.db.getSpaceConfig(message.spaceId, "rate_limit");
       const effectiveLimit = groupLimit
         ? Number.parseInt(groupLimit, 10)
@@ -486,6 +550,7 @@ export class MercuryCoreRuntime {
     callerId: string,
     verb?: string,
     arg?: string,
+    conversationContext?: { platform: string; externalId: string },
   ): Promise<string> {
     switch (command) {
       case "stop": {
@@ -514,6 +579,18 @@ export class MercuryCoreRuntime {
       }
       case "model":
         return this.executeModelsCommand(spaceId, callerId, verb, arg);
+      case "spaces":
+        return this.executeSpacesCommand(
+          spaceId,
+          callerId,
+          conversationContext,
+          verb,
+          arg,
+        );
+      case "pause":
+        return this.executePauseCommand(spaceId, callerId, verb);
+      case "resume":
+        return this.executeResumeCommand(spaceId, callerId);
       default:
         return `Unknown command: ${command}`;
     }
@@ -593,6 +670,295 @@ export class MercuryCoreRuntime {
     }
   }
 
+  private executeSpacesCommand(
+    spaceId: string,
+    _callerId: string,
+    conversationContext?: { platform: string; externalId: string },
+    verb?: string,
+    arg?: string,
+  ): string {
+    this.clearPendingDelete(spaceId);
+
+    if (!verb) {
+      return formatCategoryHelp("spaces") ?? "/spaces — space management";
+    }
+
+    switch (verb) {
+      case "list": {
+        const spaces = this.db.listSpaces();
+        if (spaces.length === 0) return "No spaces.";
+        const lines = ["Spaces:"];
+        for (const s of spaces) {
+          const convos = this.db.getSpaceConversations(s.id);
+          lines.push(
+            `  ${s.id.padEnd(16)}  ${s.name}  (${convos.length} conversation${convos.length === 1 ? "" : "s"})`,
+          );
+        }
+        return lines.join("\n");
+      }
+
+      case "create": {
+        if (!arg) return "Usage: /spaces create <id> <name>";
+        const firstSpace = arg.indexOf(" ");
+        if (firstSpace === -1) return "Usage: /spaces create <id> <name>";
+        const newId = arg.slice(0, firstSpace);
+        const newName = arg.slice(firstSpace + 1).trim();
+        if (!newName) return "Usage: /spaces create <id> <name>";
+        try {
+          this.db.createSpace(newId, newName);
+        } catch (err) {
+          return err instanceof Error ? err.message : String(err);
+        }
+        return `Created space '${newId}' (${newName}).`;
+      }
+
+      case "switch": {
+        if (!arg) return "Usage: /spaces switch <id>";
+        const targetSpace = this.db.getSpace(arg);
+        if (!targetSpace) return `Space '${arg}' not found.`;
+        if (!conversationContext) {
+          return "Cannot determine current conversation.";
+        }
+        const convo = this.db.findConversation(
+          conversationContext.platform,
+          conversationContext.externalId,
+        );
+        if (!convo) return "Current conversation not found.";
+        if (convo.spaceId === arg) return `Already in space '${arg}'.`;
+        this.db.linkConversation(convo.id, arg);
+        return `Switched to space '${targetSpace.name}' (${arg}).`;
+      }
+
+      case "delete": {
+        if (!arg) return "Usage: /spaces delete <id>";
+        if (arg === "main") return "Cannot delete the default 'main' space.";
+        const target = this.db.getSpace(arg);
+        if (!target) return `Space '${arg}' not found.`;
+        this.db.setSpaceConfig(
+          spaceId,
+          "spaces.pending_delete_id",
+          arg,
+          "system",
+        );
+        this.db.setSpaceConfig(
+          spaceId,
+          "spaces.pending_delete_at",
+          new Date().toISOString(),
+          "system",
+        );
+        const isSelf = spaceId === arg;
+        const warning = isSelf
+          ? "\n⚠️ This will unlink this conversation. You'll need to link it to another space to continue chatting."
+          : "";
+        return `Delete space '${arg}' (${target.name})? This will destroy all messages, tasks, roles, config, and preferences for that space. Reply *yes* to confirm or *no* to cancel.${warning}`;
+      }
+
+      case "unlink": {
+        if (!conversationContext) {
+          return "Cannot determine current conversation.";
+        }
+        const convo = this.db.findConversation(
+          conversationContext.platform,
+          conversationContext.externalId,
+        );
+        if (!convo) return "Current conversation not found.";
+        this.db.unlinkConversation(convo.id);
+        return "Unlinked. Messages in this conversation will be ignored until you link it to a space with /spaces switch.";
+      }
+
+      default:
+        return `/spaces: unknown verb '${verb}'. Use /spaces for help.`;
+    }
+  }
+
+  private handlePendingSpaceDelete(
+    spaceId: string,
+    callerId: string,
+    text: string,
+  ): string | null {
+    const pendingId = this.db.getSpaceConfig(
+      spaceId,
+      "spaces.pending_delete_id",
+    );
+    if (!pendingId) return null;
+
+    const seededAdmins = this.config.admins
+      ? this.config.admins
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+    if (!seededAdmins.includes(callerId)) return null;
+
+    const pendingAt = this.db.getSpaceConfig(
+      spaceId,
+      "spaces.pending_delete_at",
+    );
+    const ageMs = pendingAt
+      ? Date.now() - new Date(pendingAt).getTime()
+      : Number.POSITIVE_INFINITY;
+    const expired = Number.isNaN(ageMs) || ageMs > 60_000;
+
+    this.db.deleteSpaceConfig(spaceId, "spaces.pending_delete_id");
+    this.db.deleteSpaceConfig(spaceId, "spaces.pending_delete_at");
+
+    if (expired) {
+      if (text === "yes") return "Delete cancelled (timed out).";
+      return null;
+    }
+
+    if (text === "no") {
+      return "Delete cancelled.";
+    }
+
+    if (text === "yes") {
+      const target = this.db.getSpace(pendingId);
+      if (!target) return `Space '${pendingId}' not found.`;
+      const result = this.db.deleteSpace(pendingId);
+      if (!result.deleted) return `Failed to delete space '${pendingId}'.`;
+      return `Deleted space '${pendingId}' (${target.name}). Removed: ${result.removed.messages} messages, ${result.removed.tasks} tasks, ${result.removed.conversationsUnlinked} conversations unlinked.`;
+    }
+
+    return null;
+  }
+
+  private clearPendingDelete(spaceId: string): void {
+    this.db.deleteSpaceConfig(spaceId, "spaces.pending_delete_id");
+    this.db.deleteSpaceConfig(spaceId, "spaces.pending_delete_at");
+  }
+
+  private executePauseCommand(
+    spaceId: string,
+    callerId: string,
+    verb?: string,
+  ): string {
+    const alreadyPaused = this.db.getSpaceConfig(spaceId, "paused") === "true";
+    const hadTimer = this.db.getSpaceConfig(spaceId, "paused.resume_at");
+
+    if (verb) {
+      const parsed = this.parsePauseDuration(verb);
+      if (!parsed.ok) return parsed.error;
+
+      this.db.setSpaceConfig(spaceId, "paused", "true", callerId);
+      const resumeAt = Date.now() + parsed.ms;
+      this.db.setSpaceConfig(
+        spaceId,
+        "paused.resume_at",
+        String(resumeAt),
+        callerId,
+      );
+      this.schedulePauseTimer(spaceId, parsed.ms);
+
+      const resumeTime = new Date(resumeAt).toLocaleString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `Bot paused for ${verb}. It will auto-resume at ${resumeTime}.`;
+    }
+
+    if (alreadyPaused && !hadTimer) {
+      return "Already paused.";
+    }
+
+    if (alreadyPaused && hadTimer) {
+      this.clearPauseTimer(spaceId);
+      this.db.deleteSpaceConfig(spaceId, "paused.resume_at");
+      return "Pause is now indefinite (timer cleared). Use /resume to reactivate.";
+    }
+
+    this.db.setSpaceConfig(spaceId, "paused", "true", callerId);
+    return "Bot paused in this space. Use /resume to reactivate.";
+  }
+
+  private executeResumeCommand(spaceId: string, _callerId: string): string {
+    if (this.db.getSpaceConfig(spaceId, "paused") !== "true") {
+      return "Bot is not paused.";
+    }
+    this.clearPauseTimer(spaceId);
+    this.db.deleteSpaceConfig(spaceId, "paused");
+    this.db.deleteSpaceConfig(spaceId, "paused.resume_at");
+    return "Bot resumed.";
+  }
+
+  private parsePauseDuration(
+    input: string,
+  ): { ok: true; ms: number } | { ok: false; error: string } {
+    const match = input.match(/^(\d+)(m|h)$/i);
+    if (!match) {
+      return {
+        ok: false,
+        error: "Invalid duration. Use e.g. /pause 30m or /pause 2h.",
+      };
+    }
+    const value = Number.parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+    const ms = unit === "h" ? value * 60 * 60 * 1000 : value * 60 * 1000;
+
+    if (ms < 60_000) {
+      return { ok: false, error: "Duration must be at least 1 minute." };
+    }
+    if (ms > 24 * 60 * 60 * 1000) {
+      return {
+        ok: false,
+        error: "Duration must be at most 24 hours.",
+      };
+    }
+    return { ok: true, ms };
+  }
+
+  private schedulePauseTimer(spaceId: string, delayMs: number): void {
+    this.clearPauseTimer(spaceId);
+    const timer = setTimeout(() => {
+      this.pauseTimers.delete(spaceId);
+      if (this.db.getSpaceConfig(spaceId, "paused") !== "true") return;
+      this.db.deleteSpaceConfig(spaceId, "paused");
+      this.db.deleteSpaceConfig(spaceId, "paused.resume_at");
+      const text = "Bot resumed — pause timer expired.";
+      this.messageSender
+        ?.send(spaceId, text, [])
+        .catch((e) =>
+          logger.warn("Auto-resume notification failed", { spaceId, error: e }),
+        );
+      this.deliverTaskOutput(spaceId, text);
+    }, delayMs);
+    if (timer.unref) timer.unref();
+    this.pauseTimers.set(spaceId, timer);
+  }
+
+  private clearPauseTimer(spaceId: string): void {
+    const existing = this.pauseTimers.get(spaceId);
+    if (existing) {
+      clearTimeout(existing);
+      this.pauseTimers.delete(spaceId);
+    }
+  }
+
+  private restorePauseTimers(): void {
+    for (const space of this.db.listSpaces()) {
+      const resumeAtStr = this.db.getSpaceConfig(space.id, "paused.resume_at");
+      if (!resumeAtStr) continue;
+      const resumeAt = Number.parseInt(resumeAtStr, 10);
+      if (Number.isNaN(resumeAt)) continue;
+
+      const remaining = resumeAt - Date.now();
+      if (remaining <= 0) {
+        this.db.deleteSpaceConfig(space.id, "paused");
+        this.db.deleteSpaceConfig(space.id, "paused.resume_at");
+        const text = "Bot resumed — pause timer expired.";
+        this.messageSender?.send(space.id, text, []).catch((e) =>
+          logger.warn("Auto-resume notification failed", {
+            spaceId: space.id,
+            error: e,
+          }),
+        );
+        this.deliverTaskOutput(space.id, text);
+      } else {
+        this.schedulePauseTimer(space.id, remaining);
+      }
+    }
+  }
+
   onShutdown(hook: ShutdownHook): void {
     this.shutdownHooks.push(hook);
   }
@@ -645,9 +1011,11 @@ export class MercuryCoreRuntime {
     if (forceTimer.unref) forceTimer.unref();
 
     try {
-      // 1. Stop schedulers
+      // 1. Stop schedulers + pause timers
       logger.info("Shutdown: stopping task scheduler");
       this.scheduler.stop();
+      for (const timer of this.pauseTimers.values()) clearTimeout(timer);
+      this.pauseTimers.clear();
 
       // 2. Drain queue — cancel pending, wait for active
       logger.info("Shutdown: draining group queue");
