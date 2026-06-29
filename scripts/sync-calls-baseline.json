@@ -1,5 +1,5 @@
 {
-  "agent/container-runner.ts": 6,
+  "agent/container-runner.ts": 8,
   "core/profiles.ts": 1,
   "core/routes/console.ts": 1,
   "extensions/image-builder.ts": 1,

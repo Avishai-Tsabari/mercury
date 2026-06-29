@@ -185,22 +185,24 @@ async function runAction(): Promise<void> {
     stdio: "pipe",
   });
   if (imageCheck.status !== 0) {
-    // If the configured (registry) image isn't available, try the local build tag
-    const localTag = "mercury-agent:latest";
-    if (imageName !== localTag) {
-      const localCheck = spawnSync("docker", ["image", "inspect", localTag], {
-        stdio: "pipe",
+    const isRegistryImage = imageName.includes("/");
+    if (isRegistryImage) {
+      console.log(`Image '${imageName}' not found locally, pulling...`);
+      const pull = spawnSync("docker", ["pull", imageName], {
+        stdio: "inherit",
       });
-      if (localCheck.status === 0) {
-        console.log(
-          `ℹ️  Registry image not found, using locally built ${localTag}\n`,
-        );
-        process.env.MERCURY_AGENT_IMAGE = localTag;
-      } else {
-        console.error(`Error: Container image '${imageName}' not found.`);
+      if (pull.signal) {
+        process.exit(1);
+      }
+      if (pull.status !== 0) {
+        const firstSegment = imageName.split("/")[0];
+        const registry = firstSegment.includes(".")
+          ? firstSegment
+          : "docker.io";
+        console.error(`\nError: Failed to pull '${imageName}'.`);
         console.error(
-          `Pull it:  docker pull ${imageName}\n` +
-            `Or build: mercury build`,
+          "If this is a private registry, authenticate first:\n" +
+            `  docker login ${registry}`,
         );
         process.exit(1);
       }
@@ -274,7 +276,9 @@ function buildAction(): void {
     copyDirRecursive(resourcesSrc, resourcesDest);
     if (!existsSync(resourcesDest)) {
       console.error(`❌ Failed to copy resources/ into build context`);
-      console.error(`   Source: ${resourcesSrc} (exists: ${existsSync(resourcesSrc)})`);
+      console.error(
+        `   Source: ${resourcesSrc} (exists: ${existsSync(resourcesSrc)})`,
+      );
       console.error(`   Dest:   ${resourcesDest}`);
       process.exit(1);
     }
