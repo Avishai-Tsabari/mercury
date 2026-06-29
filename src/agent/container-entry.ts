@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -530,6 +531,8 @@ function buildEpisodeContext(
   return `<active_episodes>\n${entries.join("\n")}\n</active_episodes>`;
 }
 
+const HISTORY_CHAR_BUDGET = 400_000;
+
 function buildHistoryXml(messages: StoredMessage[]): string | null {
   // Pair up user+assistant turns; skip ambient (they have their own section)
   const turns: Array<{ user: StoredMessage; assistant?: StoredMessage }> = [];
@@ -538,7 +541,6 @@ function buildHistoryXml(messages: StoredMessage[]): string | null {
   for (const m of messages) {
     if (m.role === "user") {
       if (pendingUser) {
-        // user without assistant reply (shouldn't normally happen, but include it)
         turns.push({ user: pendingUser });
       }
       pendingUser = m;
@@ -547,20 +549,32 @@ function buildHistoryXml(messages: StoredMessage[]): string | null {
       pendingUser = null;
     }
   }
-  // Any trailing user message without a reply
   if (pendingUser) turns.push({ user: pendingUser });
 
   if (turns.length === 0) return null;
 
-  const entries = turns.map(({ user, assistant }) => {
+  // Build newest-first, stop when budget exhausted
+  const entries: string[] = [];
+  let usedChars = 0;
+
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    if (!turn) break;
+    const { user, assistant } = turn;
     const ts = formatContextTimestamp(user.createdAt);
     const userLine = `    <user>${escapeXmlText(user.content)}</user>`;
     const assistantLine = assistant
       ? `\n    <assistant>${escapeXmlText(assistant.content)}</assistant>`
       : "";
-    return `  <turn timestamp="${ts}">\n${userLine}${assistantLine}\n  </turn>`;
-  });
+    const entry = `  <turn timestamp="${ts}">\n${userLine}${assistantLine}\n  </turn>`;
 
+    if (usedChars + entry.length > HISTORY_CHAR_BUDGET && entries.length > 0)
+      break;
+    usedChars += entry.length;
+    entries.unshift(entry);
+  }
+
+  if (entries.length === 0) return null;
   return `<history>\n${entries.join("\n")}\n</history>`;
 }
 
@@ -659,7 +673,11 @@ function buildPrompt(payload: Payload): string {
  * Uses bubblewrap for defense-in-depth: Docker isolates from host, bwrap restricts within container.
  * See https://github.com/containers/bubblewrap
  */
-function buildBwrapArgs(workspace: string, command: string[]): string[] {
+function buildBwrapArgs(
+  workspace: string,
+  command: string[],
+  ioDir?: string,
+): string[] {
   const args: string[] = [
     "--ro-bind",
     "/usr",
@@ -695,6 +713,7 @@ function buildBwrapArgs(workspace: string, command: string[]): string[] {
     "/dev",
     "--tmpfs",
     "/tmp",
+    ...(ioDir ? ["--ro-bind", ioDir, ioDir] : []),
     "--unshare-pid",
     "--new-session",
     "--die-with-parent",
@@ -738,6 +757,22 @@ function invokePiOnce(
       ? "--system-prompt"
       : "--append-system-prompt";
 
+    const userPrompt = buildPrompt(payload);
+
+    // E2BIG fix: deliver large prompts via file + stdin instead of argv.
+    // System prompt → temp file in IO_DIR (pi's resolvePromptInput reads files).
+    // User prompt   → stdin pipe (pi's readPipedStdin reads when !isTTY).
+    const ioDir = process.env.IO_DIR;
+    let systemPromptArg: string;
+    let systemPromptFile: string | undefined;
+    if (ioDir) {
+      systemPromptFile = path.join(ioDir, "system-prompt.txt");
+      writeFileSync(systemPromptFile, systemPrompt);
+      systemPromptArg = systemPromptFile;
+    } else {
+      systemPromptArg = systemPrompt;
+    }
+
     const piArgs = [
       "--print",
       "--mode",
@@ -754,8 +789,7 @@ function invokePiOnce(
       "-e",
       "/app/resources/pi-extensions/subagent/index.ts",
       systemPromptFlag,
-      systemPrompt,
-      buildPrompt(payload),
+      systemPromptArg,
     ];
 
     // gVisor (runsc) provides stronger syscall-level isolation than bwrap; skip bwrap when active.
@@ -777,20 +811,24 @@ function invokePiOnce(
     let proc: ReturnType<typeof spawn>;
     if (useBubblewrap) {
       const bwrapArgs = [
-        ...buildBwrapArgs(payload.spaceWorkspace, ["pi"]),
+        ...buildBwrapArgs(payload.spaceWorkspace, ["pi"], ioDir),
         ...piArgs,
       ];
       proc = spawn("bwrap", bwrapArgs, {
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         env: process.env,
       });
     } else {
       proc = spawn("pi", piArgs, {
         cwd: payload.spaceWorkspace,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
         env: process.env,
       });
     }
+
+    // Pipe user prompt via stdin — pi's readPipedStdin() reads this when !isTTY.
+    proc.stdin?.on("error", () => {});
+    proc.stdin?.end(userPrompt, "utf8");
 
     let stdout = "";
     let stderr = "";
@@ -810,9 +848,25 @@ function invokePiOnce(
       stderr += chunk.toString("utf8");
     });
 
-    proc.on("error", (error) => reject(error));
+    proc.on("error", (error) => {
+      if (systemPromptFile) {
+        try {
+          unlinkSync(systemPromptFile);
+        } catch (e) {
+          process.stderr.write(`system-prompt cleanup: ${e}\n`);
+        }
+      }
+      reject(error);
+    });
 
     proc.on("close", (code) => {
+      if (systemPromptFile) {
+        try {
+          unlinkSync(systemPromptFile);
+        } catch (e) {
+          process.stderr.write(`system-prompt cleanup: ${e}\n`);
+        }
+      }
       logTiming("container.pi.done", {
         piDurationMs: Date.now() - piSpawnedAt,
         exitCode: code ?? null,
