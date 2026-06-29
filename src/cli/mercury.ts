@@ -5,6 +5,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -43,7 +44,9 @@ function copyDirRecursive(src: string, dest: string): void {
     if (entry === "node_modules") continue;
     const srcPath = join(src, entry);
     const destPath = join(dest, entry);
-    if (statSync(srcPath).isDirectory()) {
+    const stat = lstatSync(srcPath);
+    if (stat.isSymbolicLink()) continue;
+    if (stat.isDirectory()) {
       copyDirRecursive(srcPath, destPath);
     } else {
       copyFileSync(srcPath, destPath);
@@ -235,7 +238,7 @@ async function runAction(): Promise<void> {
 
 function buildAction(): void {
   // Build from package sources using a temp context — no files needed in user project
-  const tmpDir = join(CWD, ".mercury", ".build-context");
+  const tmpDir = join(tmpdir(), "mercury-build-context");
   rmSync(tmpDir, { recursive: true, force: true });
   mkdirSync(tmpDir, { recursive: true });
 
