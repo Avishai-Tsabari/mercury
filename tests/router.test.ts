@@ -140,6 +140,42 @@ describe("routeInput — trigger matching", () => {
     });
     expect(r.type).toBe("assistant");
   });
+
+  test("auto-injects @botUsername into trigger patterns", () => {
+    const cfg = { ...config, triggerPatterns: "Hey,Bot", botUsername: "MyBot" };
+    const r = route({ text: "@MyBot do stuff", config: cfg });
+    expect(r.type).toBe("assistant");
+    if (r.type === "assistant") {
+      expect(r.prompt).toBe("do stuff");
+    }
+  });
+
+  test("does not duplicate @botUsername when already in patterns", () => {
+    const cfg = {
+      ...config,
+      triggerPatterns: "@Mercury,Hey",
+      botUsername: "Mercury",
+    };
+    const r = route({ text: "@Mercury hi", config: cfg });
+    expect(r.type).toBe("assistant");
+    if (r.type === "assistant") {
+      expect(r.prompt).toBe("hi");
+    }
+  });
+
+  test("@botUsername injection is case-insensitive", () => {
+    const cfg = {
+      ...config,
+      triggerPatterns: "@mybot,Hey",
+      botUsername: "MyBot",
+    };
+    // @mybot already covers @MyBot — should not add a duplicate
+    const r = route({ text: "@mybot hi", config: cfg });
+    expect(r.type).toBe("assistant");
+    if (r.type === "assistant") {
+      expect(r.prompt).toBe("hi");
+    }
+  });
 });
 
 describe("routeInput — role resolution", () => {

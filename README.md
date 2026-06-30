@@ -17,6 +17,7 @@ Mercury is a personal AI assistant that lives where you chat. It connects to Wha
 
 ## Prerequisites
 
+- **[Node.js](https://nodejs.org/)** >= 18 — Required for `npm install -g mercury-agent`
 - **[Bun](https://bun.sh)** >= 1.0 — JavaScript runtime used by Mercury
 - **[Docker](https://docs.docker.com/get-docker/)** — Required for running agent containers
 - **Windows users:** Mercury runs best under [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). Install WSL2 with `wsl --install`, then install Bun and Docker inside it.
@@ -357,6 +358,10 @@ Supported OAuth providers: Anthropic, GitHub Copilot, Google Gemini CLI, Antigra
 |----------|---------|-------------|
 | `MERCURY_AGENT_CONTAINER_IMAGE` | `ghcr.io/avishai-tsabari/mercury-agent:latest` | Container image |
 | `MERCURY_CONTAINER_TIMEOUT_MS` | `300000` | Container timeout (5 min) |
+| `MERCURY_CONTAINER_RUNTIME` | `runc` | `runc` (default) or `runsc` ([gVisor](https://gvisor.dev)) |
+| `MERCURY_CONTAINER_BWRAP_DOCKER_COMPAT` | `false` | Set `true` on Linux Docker Engine (see note below) |
+
+> **Linux Docker Engine:** Mercury uses [bubblewrap](https://github.com/containers/bubblewrap) for in-container sandboxing. On Linux Docker Engine (not Docker Desktop), bwrap cannot mount `/proc` without extra privileges. Either set `container_bwrap_docker_compat: true` in `mercury.yaml` (adds `--privileged` to `docker run`), or install [gVisor](https://gvisor.dev/docs/user_guide/install/) and set `MERCURY_CONTAINER_RUNTIME=runsc` to skip bwrap entirely.
 
 **KB Distillation:**
 

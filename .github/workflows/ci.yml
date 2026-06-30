@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: Add stack setup steps, e.g.:
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 20 }
+      # - run: npm ci
+
+      - name: Run checks
+        run: |
+          # TODO: Paste your check command from .claude/project-checks.md
+          # Example: npm run typecheck && npm run lint && npm test
+          echo "CI not configured — fill in the check command above"
+          exit 1

@@ -42,3 +42,22 @@ mercury service uninstall # Remove service
 - **Tests**: Co-located in `tests/`, use temp DBs
 - **Config**: `loadConfig()` in `config.ts` — optional `mercury.yaml` + `MERCURY_*` env (env wins); see `docs/configuration.md`
 - **Errors**: Use typed errors from `container-error.ts`
+
+## Planning Workflow
+
+> Added by agentic-project-boilerplate. See docs/ for templates and NEXT-STEPS.md for customization.
+
+One file per feature. Status is tracked by folder and by the `Status` field inside the file.
+
+| Stage | Command | Location |
+|-------|---------|----------|
+| Idea | `/f-feature-idea` | `docs/ideas/{slug}.md` |
+| Planning | `/f-feature-planning` | `docs/backlog/{slug}.md` |
+| Implementation | `/f-feature-dev` | `docs/in-progress/{slug}.md` |
+| Archive | (automatic) | `docs/archive/{slug}.md` |
+| Bug report | `/f-bug-report` | `docs/bugs/{slug}.md` |
+| Bug fix | `/f-bug-fix` | `docs/debug/{severity}/` |
+| QA | `/f-feature-qa` | — |
+| Code review | `/f-review-session` | — |
+| Notes | `/f-doc-note` | `docs/notes/` |
+| Roadmap sync | `/f-doc-sync` | `docs/ROADMAP.md` |

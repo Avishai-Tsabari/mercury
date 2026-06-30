@@ -84,6 +84,13 @@ export function routeInput(input: {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+
+  // Auto-inject @botUsername so adapters that rewrite @-mentions (e.g. WhatsApp)
+  // always trigger the bot without manual config.
+  const atBot = `@${input.config.botUsername}`;
+  if (!defaultPatterns.some((p) => p.toLowerCase() === atBot.toLowerCase())) {
+    defaultPatterns.push(atBot);
+  }
   const triggerConfig = loadTriggerConfig(input.db, input.spaceId, {
     patterns: defaultPatterns,
     match: input.config.triggerMatch,
