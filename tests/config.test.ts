@@ -31,7 +31,7 @@ describe("loadConfig", () => {
   test("defaults", () => {
     const config = loadConfig();
     expect(config.dataDir).toBe(".mercury");
-    expect(config.triggerPatterns).toBe("@Pi,Pi");
+    expect(config.triggerPatterns).toBe("@Mercury,Mercury");
     expect(config.triggerMatch).toBe("mention");
     expect(config.maxConcurrency).toBe(2);
     expect(config.port).toBe(8787);

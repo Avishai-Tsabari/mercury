@@ -14,7 +14,11 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close();
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  try {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch {
+    // Windows: SQLite WAL handle may not be released yet
+  }
 });
 
 describe("spaces", () => {

@@ -405,9 +405,6 @@ export class Db {
           "DELETE FROM message_platform_ids WHERE mercury_message_id IN (SELECT id FROM messages WHERE space_id = ?)",
         )
         .run(spaceId);
-      this.db
-        .query("DELETE FROM extension_state WHERE space_id = ?")
-        .run(spaceId);
       const dailyRateUsage = this.db
         .query("DELETE FROM daily_rate_usage WHERE space_id = ?")
         .run(spaceId).changes;
