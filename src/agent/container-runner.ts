@@ -978,18 +978,24 @@ export class AgentContainerRunner {
         "CONTAINER_RUNTIME=runsc",
       );
     } else if (this.config.containerBwrapDockerCompat || isDockerDesktop()) {
-      logger.info("Enabling bwrap Docker compat (seccomp/apparmor/SYS_ADMIN)", {
-        configFlag: this.config.containerBwrapDockerCompat,
-        dockerDesktop: isDockerDesktop(),
-      });
-      args.push(
-        "--security-opt",
-        "seccomp=unconfined",
-        "--security-opt",
-        "apparmor=unconfined",
-        "--cap-add",
-        "SYS_ADMIN",
-      );
+      if (this.config.containerBwrapDockerCompat) {
+        logger.info(
+          "Enabling bwrap Docker compat with --privileged (containerBwrapDockerCompat=true)",
+        );
+        args.push("--privileged");
+      } else {
+        logger.info(
+          "Enabling bwrap Docker compat (seccomp/apparmor/SYS_ADMIN) for Docker Desktop",
+        );
+        args.push(
+          "--security-opt",
+          "seccomp=unconfined",
+          "--security-opt",
+          "apparmor=unconfined",
+          "--cap-add",
+          "SYS_ADMIN",
+        );
+      }
     }
 
     for (const { key, value } of envPairs) {
