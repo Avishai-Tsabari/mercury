@@ -8,7 +8,7 @@ export default function (mercury: {
   mercury.cli({
     name: "pinchtab",
     install:
-      'npm install -g pinchtab playwright && npx playwright install --with-deps chromium && CHROMIUM=$(NODE_PATH="$(npm root -g)" node -e "try{process.stdout.write(require(\'playwright\').chromium.executablePath())}catch(e){}" 2>/dev/null) && { test -x "$CHROMIUM" || CHROMIUM=$(find /home/mercury/.cache/ms-playwright -type f -path \'*/chrome-linux/chrome\' ! -path \'*headless_shell*\' 2>/dev/null | head -1); } && test -n "$CHROMIUM" && test -x "$CHROMIUM" && ln -sf "$CHROMIUM" /usr/local/bin/chromium && ln -sf "$CHROMIUM" /usr/bin/chromium && rm -rf /var/lib/apt/lists/*',
+      'npm install -g pinchtab@0.13.2 playwright && npx playwright install --with-deps chromium && CHROMIUM=$(NODE_PATH="$(npm root -g)" node -e "try{process.stdout.write(require(\'playwright\').chromium.executablePath())}catch(e){}" 2>/dev/null) && { test -x "$CHROMIUM" || CHROMIUM=$(find /home/mercury/.cache/ms-playwright -type f -path \'*/chrome-linux/chrome\' ! -path \'*headless_shell*\' 2>/dev/null | head -1); } && test -n "$CHROMIUM" && test -x "$CHROMIUM" && ln -sf "$CHROMIUM" /usr/local/bin/chromium && ln -sf "$CHROMIUM" /usr/bin/chromium && rm -rf /var/lib/apt/lists/*',
   });
   mercury.permission({ defaultRoles: ["admin", "member"] });
   mercury.skill("./skill");
