@@ -19,7 +19,7 @@ Mercury is a personal AI assistant that lives where you chat. It connects to Wha
 
 - **[Node.js](https://nodejs.org/)** >= 18 — Required for `npm install -g mercury-agent`
 - **[Bun](https://bun.sh)** >= 1.0 — JavaScript runtime used by Mercury
-- **[Docker](https://docs.docker.com/get-docker/)** — Required for running agent containers
+- **[Docker](https://docs.docker.com/get-docker/)** — Required for running agent containers. On Linux, also install `docker-buildx` (`apt-get install docker-buildx`) — Docker Desktop includes it, but Docker Engine on Linux does not.
 - **Windows users:** Mercury runs best under [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). Install WSL2 with `wsl --install`, then install Bun and Docker inside it.
 
 ## Quick Start
