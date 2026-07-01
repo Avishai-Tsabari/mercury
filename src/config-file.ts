@@ -167,7 +167,7 @@ const mercuryFileSchema = z
     dm_auto_space: z
       .object({
         enabled: z.boolean().optional(),
-        admin_numbers: z.array(z.string()).optional(),
+        admin_ids: z.array(z.string()).optional(),
         default_system_prompt: z.string().optional(),
         default_member_permissions: z.string().optional(),
       })
@@ -294,8 +294,8 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
   if (f.dm_auto_space?.enabled != null) {
     o.dmAutoSpaceEnabled = f.dm_auto_space.enabled;
   }
-  if (f.dm_auto_space?.admin_numbers != null) {
-    o.dmAutoSpaceAdminNumbers = f.dm_auto_space.admin_numbers.join(",");
+  if (f.dm_auto_space?.admin_ids != null) {
+    o.dmAutoSpaceAdminIds = f.dm_auto_space.admin_ids.join(",");
   }
   if (f.dm_auto_space?.default_system_prompt != null) {
     o.dmAutoSpaceDefaultSystemPrompt = f.dm_auto_space.default_system_prompt;
@@ -370,7 +370,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   rateLimitDailyMember: "MERCURY_RATE_LIMIT_DAILY_MEMBER",
   rateLimitDailyAdmin: "MERCURY_RATE_LIMIT_DAILY_ADMIN",
   dmAutoSpaceEnabled: "MERCURY_DM_AUTO_SPACE_ENABLED",
-  dmAutoSpaceAdminNumbers: "MERCURY_DM_AUTO_SPACE_ADMIN_NUMBERS",
+  dmAutoSpaceAdminIds: "MERCURY_DM_AUTO_SPACE_ADMIN_IDS",
   dmAutoSpaceDefaultSystemPrompt: "MERCURY_DM_AUTO_SPACE_DEFAULT_SYSTEM_PROMPT",
   dmAutoSpaceDefaultMemberPermissions:
     "MERCURY_DM_AUTO_SPACE_DEFAULT_MEMBER_PERMISSIONS",

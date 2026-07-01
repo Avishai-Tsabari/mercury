@@ -252,7 +252,7 @@ const schema = z.object({
 
   // ─── DM Auto-Space ─────────────────────────────────────────────────
   dmAutoSpaceEnabled: booleanFromEnv.default(false),
-  dmAutoSpaceAdminNumbers: z.string().default(""),
+  dmAutoSpaceAdminIds: z.string().default(""),
   dmAutoSpaceDefaultSystemPrompt: z.string().default(""),
   dmAutoSpaceDefaultMemberPermissions: z.string().default("prompt,prefs.get"),
 });

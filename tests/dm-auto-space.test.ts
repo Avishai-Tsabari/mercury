@@ -14,7 +14,7 @@ describe("dm-auto-space", () => {
 
   const autoSpace: AutoSpaceConfig = {
     enabled: true,
-    adminNumbers: ["972501234567"],
+    adminIds: ["972501234567"],
     defaultSystemPrompt: "You are a barber shop assistant",
     defaultMemberPermissions: "prompt,prefs.get",
     rateLimitDailyMember: 20,
@@ -137,7 +137,7 @@ describe("dm-auto-space", () => {
   });
 
   test("admin number with + prefix: normalized and matched", () => {
-    const config = { ...autoSpace, adminNumbers: ["+972501234567"] };
+    const config = { ...autoSpace, adminIds: ["+972501234567"] };
     const result = resolveConversation(
       db,
       "whatsapp",

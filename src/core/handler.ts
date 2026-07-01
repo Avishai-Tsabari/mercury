@@ -28,7 +28,7 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
   const autoSpaceConfig: AutoSpaceConfig | undefined = config.dmAutoSpaceEnabled
     ? {
         enabled: true,
-        adminNumbers: config.dmAutoSpaceAdminNumbers
+        adminIds: config.dmAutoSpaceAdminIds
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),

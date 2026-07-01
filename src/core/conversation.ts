@@ -9,7 +9,7 @@ export interface ConversationResolution {
 
 export interface AutoSpaceConfig {
   enabled: boolean;
-  adminNumbers: string[];
+  adminIds: string[];
   defaultSystemPrompt: string;
   defaultMemberPermissions: string;
   rateLimitDailyMember: number;
@@ -61,7 +61,7 @@ export function resolveConversation(
   if (!autoSpace?.enabled || kind !== "dm") return null;
 
   const senderNormalized = normalizePhone(externalId);
-  const isAdmin = autoSpace.adminNumbers.some(
+  const isAdmin = autoSpace.adminIds.some(
     (n) => normalizePhone(n) === senderNormalized,
   );
 
