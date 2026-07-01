@@ -31,7 +31,7 @@ function createRuntime(tempDir: string, overrides?: Record<string, unknown>) {
     spacesDir: path.join(tempDir, "spaces"),
     whatsappAuthDir: path.join(tempDir, "whatsapp-auth"),
     ...overrides,
-  } as any);
+  });
 }
 
 function makeMsg(text = "@Pi hello") {
