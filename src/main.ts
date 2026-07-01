@@ -224,8 +224,8 @@ async function main() {
   // profile's own CLI permission) are recognized as valid.
   const activeProfile = loadActiveProfile(resolveProjectPath(config.dataDir));
   if (activeProfile) {
-    setActiveProfileMemberPermissions(activeProfile.memberPermissions);
-    setActiveProfileSystemPrompt(activeProfile.systemPrompt);
+    setActiveProfileMemberPermissions(activeProfile.memberPermissions ?? null);
+    setActiveProfileSystemPrompt(activeProfile.systemPrompt ?? null);
     logger.info("Applicative profile active", {
       profile: activeProfile.name,
       memberPermissions:

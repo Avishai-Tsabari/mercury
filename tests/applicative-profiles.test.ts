@@ -191,4 +191,14 @@ describe("profile-aware permission resolution", () => {
     const perms = getRolePermissions(db, "main", "member");
     expect(perms.has("prefs.get")).toBe(true);
   });
+
+  test("a malformed (non-array) active profile set falls back to defaults, not a throw", () => {
+    // Simulates a corrupted active-profile.json whose memberPermissions is
+    // missing/non-array reaching the setter.
+    setActiveProfileMemberPermissions(undefined as unknown as string[] | null);
+    expect(() => getRolePermissions(db, "main", "member")).not.toThrow();
+    expect(getRolePermissions(db, "main", "member").has("prefs.get")).toBe(
+      true,
+    );
+  });
 });

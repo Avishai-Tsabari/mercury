@@ -189,8 +189,9 @@ export function getRolePermissions(
 
   // An active profile sets the exhaustive member permission set (project-wide),
   // ahead of built-in/extension defaults. Members only; profiles never widen
-  // admin/system.
-  if (role === "member" && activeProfileMemberPermissions !== null) {
+  // admin/system. Guard with Array.isArray so a malformed persisted activation
+  // (missing/non-array value) falls back to defaults instead of throwing here.
+  if (role === "member" && Array.isArray(activeProfileMemberPermissions)) {
     return toPermissionSet(activeProfileMemberPermissions);
   }
 
