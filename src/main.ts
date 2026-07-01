@@ -35,7 +35,10 @@ import { createChatShim } from "./chat-shim.js";
 import { loadConfig, resolveProjectPath } from "./config.js";
 import { createMessageHandler } from "./core/handler.js";
 import { setActiveProfileMemberPermissions } from "./core/permissions.js";
-import { loadActiveProfile } from "./core/profiles.js";
+import {
+  loadActiveProfile,
+  setActiveProfileSystemPrompt,
+} from "./core/profiles.js";
 import { MercuryCoreRuntime } from "./core/runtime.js";
 import { runStorageCleanup } from "./core/storage-cleanup.js";
 import { isOverQuota } from "./core/storage-guard.js";
@@ -222,6 +225,7 @@ async function main() {
   const activeProfile = loadActiveProfile(resolveProjectPath(config.dataDir));
   if (activeProfile) {
     setActiveProfileMemberPermissions(activeProfile.memberPermissions);
+    setActiveProfileSystemPrompt(activeProfile.systemPrompt);
     logger.info("Applicative profile active", {
       profile: activeProfile.name,
       memberPermissions:

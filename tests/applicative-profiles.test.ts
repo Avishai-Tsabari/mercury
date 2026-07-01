@@ -9,9 +9,11 @@ import {
   setActiveProfileMemberPermissions,
 } from "../src/core/permissions.js";
 import {
+  getActiveProfileSystemPrompt,
   loadActiveProfile,
   loadProfileFromDir,
   persistActiveProfile,
+  setActiveProfileSystemPrompt,
   validateProfileCapabilities,
 } from "../src/core/profiles.js";
 import { Db } from "../src/storage/db.js";
@@ -127,6 +129,13 @@ system_prompt: |
 
   test("loadActiveProfile returns null when no profile applied", () => {
     expect(loadActiveProfile(path.join(tmpDir, "empty"))).toBeNull();
+  });
+
+  test("system prompt holder set/get/clear round-trips", () => {
+    setActiveProfileSystemPrompt("You are a barber assistant.");
+    expect(getActiveProfileSystemPrompt()).toBe("You are a barber assistant.");
+    setActiveProfileSystemPrompt(null);
+    expect(getActiveProfileSystemPrompt()).toBeNull();
   });
 });
 

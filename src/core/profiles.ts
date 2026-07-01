@@ -212,6 +212,23 @@ export function loadActiveProfile(dataDir: string): ActiveProfile | null {
 }
 
 /**
+ * Active profile persona (project-wide), set once at startup. Injected into
+ * every container's system prompt. Held here so the runtime can read it without
+ * re-reading the manifest per message.
+ */
+let activeProfileSystemPrompt: string | null = null;
+
+/** Set (or clear, with null) the active profile's system prompt. */
+export function setActiveProfileSystemPrompt(prompt: string | null): void {
+  activeProfileSystemPrompt = prompt;
+}
+
+/** The active profile's system prompt, or null when no profile scopes it. */
+export function getActiveProfileSystemPrompt(): string | null {
+  return activeProfileSystemPrompt;
+}
+
+/**
  * Throw if any of the profile's declared `capabilities` is not present as an
  * installed extension directory under `<dataDir>/extensions`. Capabilities may
  * be satisfied either by a bundled/pre-installed extension or by one the
