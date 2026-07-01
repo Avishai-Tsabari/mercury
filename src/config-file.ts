@@ -10,6 +10,7 @@ import {
 /** Env-only: never loaded from mercury.yaml (secrets). */
 const SECRET_SCHEMA_KEYS = new Set([
   "apiSecret",
+  "callerTokenKey",
   "chatApiKey",
   "consoleUrl",
   "consoleInternalSecret",
@@ -450,6 +451,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   mediaMaxSizeMb: "MERCURY_MEDIA_MAX_SIZE_MB",
   admins: "MERCURY_ADMINS",
   apiSecret: "MERCURY_API_SECRET",
+  callerTokenKey: "MERCURY_CALLER_TOKEN_KEY",
   chatApiKey: "MERCURY_CHAT_API_KEY",
   consoleUrl: "MERCURY_CONSOLE_URL",
   consoleUserId: "MERCURY_CONSOLE_USER_ID",

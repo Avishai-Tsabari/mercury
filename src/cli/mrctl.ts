@@ -9,6 +9,9 @@ const API_URL = process.env.API_URL;
 const CALLER_ID = process.env.CALLER_ID;
 const SPACE_ID = process.env.SPACE_ID;
 const API_SECRET = process.env.API_SECRET;
+// Per-turn, caller-bound token. When present, the host derives identity from it
+// instead of trusting the x-mercury-caller / x-mercury-space headers.
+const CALLER_TOKEN = process.env.CALLER_TOKEN;
 // gVisor mode: the outer container is off docker0, so reach the API over a
 // per-agent unix socket instead of TCP. When set, host/port in API_URL are
 // ignored (Bun routes the request through the socket). Unset for runc/local.
@@ -38,6 +41,10 @@ const headers: Record<string, string> = {
 
 if (API_SECRET) {
   headers.authorization = `Bearer ${API_SECRET}`;
+}
+
+if (CALLER_TOKEN) {
+  headers["x-mercury-token"] = CALLER_TOKEN;
 }
 
 async function api(

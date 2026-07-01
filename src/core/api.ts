@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import type { ApiContext, AuthContext, Env } from "./api-types.js";
+import { verifyCallerToken } from "./caller-token.js";
 import { resolveRole } from "./permissions.js";
 import {
   config,
@@ -46,9 +47,26 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
       }
     }
 
-    // Parse auth headers
-    const callerId = c.req.header("x-mercury-caller");
-    const spaceId = c.req.header("x-mercury-space");
+    // Resolve caller identity. A per-turn caller token (minted host-side at
+    // container spawn) is authoritative and unspoofable — prefer it over the
+    // x-mercury-caller / x-mercury-space headers, which any code holding the
+    // shared API_SECRET could forge. Headers remain the fallback for callers
+    // that predate tokens (backward compatibility).
+    let callerId = c.req.header("x-mercury-caller");
+    let spaceId = c.req.header("x-mercury-space");
+
+    const callerToken = c.req.header("x-mercury-token");
+    if (callerToken) {
+      const verified = verifyCallerToken(
+        callerToken,
+        apiCtx.config.callerTokenKey,
+      );
+      if (!verified) {
+        return c.json({ error: "Invalid or expired caller token" }, 401);
+      }
+      callerId = verified.callerId;
+      spaceId = verified.spaceId;
+    }
 
     if (!callerId || !spaceId) {
       return c.json(

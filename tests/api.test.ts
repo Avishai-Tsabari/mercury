@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Hono } from "hono";
 import type { AppConfig } from "../src/config.js";
 import { createApiApp, type Env } from "../src/core/api.js";
+import { mintCallerToken } from "../src/core/caller-token.js";
 import {
   registerPermission,
   resetPermissions,
@@ -151,6 +152,40 @@ describe("API auth", () => {
       headers: { "x-mercury-space": "group1" },
     });
     expect(res.status).toBe(400);
+  });
+
+  test("a valid caller token overrides spoofed identity headers", async () => {
+    const token = mintCallerToken(
+      {
+        callerId: "realuser",
+        spaceId: "group1",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      config.callerTokenKey,
+    );
+    const res = await app.request("/whoami", {
+      headers: {
+        // Attacker-controlled headers claim a different caller...
+        "x-mercury-caller": "attacker",
+        "x-mercury-space": "group1",
+        // ...but the token is authoritative.
+        "x-mercury-token": token,
+      },
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown>;
+    expect(data.callerId).toBe("realuser");
+  });
+
+  test("an invalid caller token is rejected with 401", async () => {
+    const res = await app.request("/whoami", {
+      headers: {
+        "x-mercury-caller": "user1",
+        "x-mercury-space": "group1",
+        "x-mercury-token": "tampered.token",
+      },
+    });
+    expect(res.status).toBe(401);
   });
 
   test("missing group header returns 400", async () => {

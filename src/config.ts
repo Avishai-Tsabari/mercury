@@ -210,6 +210,13 @@ const schema = z.object({
   // ─── Security ─────────────────────────────────────────────────────
   /** Shared secret for API authentication. Required for /api/* routes. */
   apiSecret: z.string().optional(),
+  /**
+   * Host-only HMAC key for signing per-turn caller tokens. Never injected into
+   * containers. When unset, an ephemeral random key is generated per host
+   * process (fine for single-process deployments). Only set this when token
+   * minting and verification run in separate processes.
+   */
+  callerTokenKey: z.string().optional(),
   /** Optional API key for the /chat endpoint. When unset, /chat is open (for local use). */
   chatApiKey: z.string().optional(),
   /**

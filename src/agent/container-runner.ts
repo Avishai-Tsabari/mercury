@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path, { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AppConfig, resolveProjectPath } from "../config.js";
+import { mintCallerToken } from "../core/caller-token.js";
 import { scanOutbox } from "../core/outbox.js";
 import type { ExtImageBuildState } from "../extensions/image-builder.js";
 import { type Logger, logger } from "../logger.js";
@@ -39,6 +40,8 @@ const RESULT_POLL_MS = 150;
 const LIVENESS_EVERY = 14;
 /** Default timeout for short Docker CLI commands (create, start, inspect, kill). */
 const EXEC_DOCKER_TIMEOUT_MS = 20_000;
+/** Extra seconds added to a caller token's TTL beyond the container timeout, so the token never expires mid-turn. */
+const CALLER_TOKEN_TTL_BUFFER_SECONDS = 60;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -678,6 +681,9 @@ export class AgentContainerRunner {
     // Env vars that should never be passed to containers
     const BLOCKED_ENV_VARS = new Set([
       "MERCURY_API_SECRET",
+      // Host-only: signs per-turn caller tokens. Injecting it would let the
+      // agent forge a token for any caller, defeating the whole mechanism.
+      "MERCURY_CALLER_TOKEN_KEY",
       // Host-only: the inner→outer API socket path is set by code per spawn;
       // never let an agent override which socket mrctl targets.
       "MERCURY_API_SOCKET",
@@ -815,6 +821,23 @@ export class AgentContainerRunner {
       },
       // API secret for mrctl auth from inside containers
       { key: "API_SECRET", value: this.config.apiSecret ?? "" },
+      // Per-turn caller token: authoritative, unspoofable identity for the host
+      // API. Bound to this caller+space, short-lived. The signing key stays on
+      // the host, so the agent can read this token but cannot forge another.
+      {
+        key: "CALLER_TOKEN",
+        value: mintCallerToken(
+          {
+            callerId: input.callerId,
+            spaceId: input.spaceId,
+            exp:
+              Math.floor(Date.now() / 1000) +
+              Math.ceil((this.config.containerTimeoutMs ?? 600_000) / 1000) +
+              CALLER_TOKEN_TTL_BUFFER_SECONDS,
+          },
+          this.config.callerTokenKey,
+        ),
+      },
       // gVisor: inner containers reach the API over a per-agent unix socket
       // (the outer is off docker0). mrctl uses this transport when set; API_URL
       // host/port above are then ignored. Absent for runc/local.
