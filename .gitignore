@@ -28,6 +28,7 @@ docs/ARCHITECTURE.md
 docs/DESIGN.md
 docs/VISION.md
 docs/ROADMAP.md
+docs/TODOS.md
 .claude/worktrees/
 .claude/.boilerplate-version
 .claude/settings.local.json
