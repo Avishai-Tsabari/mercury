@@ -29,7 +29,7 @@ const mercuryFileSchema = z
         port: z.number().int().min(1).max(65535).optional(),
         bot_username: z.string().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     model: z
@@ -48,7 +48,7 @@ const mercuryFileSchema = z
           .optional(),
         capabilities: z.record(z.string(), z.unknown()).optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     /** Top-level alias for `model.chain` */
@@ -65,7 +65,7 @@ const mercuryFileSchema = z
         whatsapp: z.boolean().optional(),
         telegram: z.boolean().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     runtime: z
@@ -88,14 +88,14 @@ const mercuryFileSchema = z
         rate_limit_daily_member: z.number().int().min(0).max(10000).optional(),
         rate_limit_daily_admin: z.number().int().min(0).max(10000).optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     scheduling: z
       .object({
         default_timezone: z.string().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     trigger: z
@@ -103,7 +103,7 @@ const mercuryFileSchema = z
         patterns: z.string().optional(),
         match: z.string().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     context: z
@@ -112,7 +112,7 @@ const mercuryFileSchema = z
         window_size: z.number().int().min(1).max(50).optional(),
         reply_chain_depth: z.number().int().min(1).max(50).optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     agent: z
@@ -127,7 +127,7 @@ const mercuryFileSchema = z
         container_bwrap_docker_compat: z.boolean().optional(),
         override_pi_system_prompt: z.boolean().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     discord: z
@@ -139,14 +139,14 @@ const mercuryFileSchema = z
           .max(60 * 60 * 1000)
           .optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     telegram: z
       .object({
         format_enabled: z.boolean().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     media: z
@@ -154,14 +154,14 @@ const mercuryFileSchema = z
         enabled: z.boolean().optional(),
         max_size_mb: z.number().min(1).max(100).optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     permissions: z
       .object({
         admins: z.string().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
 
     dm_auto_space: z
@@ -171,14 +171,108 @@ const mercuryFileSchema = z
         default_system_prompt: z.string().optional(),
         default_member_permissions: z.string().optional(),
       })
-      .strict()
+      .strip()
       .optional(),
   })
-  .strict();
+  .strip();
 
 type MercuryFile = z.infer<typeof mercuryFileSchema>;
 
 export type RawMercuryConfigInput = Record<string, unknown>;
+
+const KNOWN_TOP_KEYS = new Set([
+  "server",
+  "model",
+  "model_chain",
+  "ingress",
+  "runtime",
+  "scheduling",
+  "trigger",
+  "context",
+  "agent",
+  "discord",
+  "telegram",
+  "media",
+  "permissions",
+  "dm_auto_space",
+]);
+
+const KNOWN_SECTION_KEYS: Record<string, Set<string>> = {
+  server: new Set(["port", "bot_username"]),
+  model: new Set([
+    "chain",
+    "provider",
+    "model",
+    "fallback_provider",
+    "fallback",
+    "max_retries_per_leg",
+    "chain_budget_ms",
+    "capabilities",
+  ]),
+  ingress: new Set(["discord", "slack", "teams", "whatsapp", "telegram"]),
+  runtime: new Set([
+    "data_dir",
+    "auth_path",
+    "whatsapp_auth_dir",
+    "max_concurrency",
+    "log_level",
+    "log_format",
+    "rate_limit_per_user",
+    "rate_limit_window_ms",
+    "rate_limit_daily_member",
+    "rate_limit_daily_admin",
+  ]),
+  scheduling: new Set(["default_timezone"]),
+  trigger: new Set(["patterns", "match"]),
+  context: new Set(["mode", "window_size", "reply_chain_depth"]),
+  agent: new Set([
+    "image",
+    "container_timeout_ms",
+    "container_bwrap_docker_compat",
+    "override_pi_system_prompt",
+  ]),
+  discord: new Set(["gateway_duration_ms"]),
+  telegram: new Set(["format_enabled"]),
+  media: new Set(["enabled", "max_size_mb"]),
+  permissions: new Set(["admins"]),
+  dm_auto_space: new Set([
+    "enabled",
+    "admin_ids",
+    "default_system_prompt",
+    "default_member_permissions",
+  ]),
+};
+
+function warnUnknownKeys(
+  rawYaml: Record<string, unknown>,
+  configPath: string,
+  log: (msg: string) => void,
+): void {
+  for (const key of Object.keys(rawYaml)) {
+    if (!KNOWN_TOP_KEYS.has(key)) {
+      log(
+        `[WARN] Unknown key "${key}" in ${configPath} — ignored. Check spelling or update mercury-agent.`,
+      );
+      continue;
+    }
+    const section = rawYaml[key];
+    const knownKeys = KNOWN_SECTION_KEYS[key];
+    if (
+      knownKeys &&
+      section != null &&
+      typeof section === "object" &&
+      !Array.isArray(section)
+    ) {
+      for (const subKey of Object.keys(section)) {
+        if (!knownKeys.has(subKey)) {
+          log(
+            `[WARN] Unknown key "${key}.${subKey}" in ${configPath} — ignored. Check spelling or update mercury-agent.`,
+          );
+        }
+      }
+    }
+  }
+}
 
 function resolveConfigPath(cwd: string): string | null {
   const explicit = process.env.MERCURY_CONFIG_FILE;
@@ -391,6 +485,7 @@ function envValueForSchema(
 export function mergeRawMercuryConfig(
   env: NodeJS.ProcessEnv = process.env,
   cwd: string = process.cwd(),
+  log: (msg: string) => void = console.warn,
 ): RawMercuryConfigInput {
   const configPath = resolveConfigPath(cwd);
   let fromFile: RawMercuryConfigInput = {};
@@ -404,6 +499,11 @@ export function mergeRawMercuryConfig(
       throw new Error(`Failed to read mercury config ${configPath}: ${msg}`);
     }
     if (rawYaml == null) rawYaml = {};
+
+    if (typeof rawYaml === "object" && !Array.isArray(rawYaml)) {
+      warnUnknownKeys(rawYaml as Record<string, unknown>, configPath, log);
+    }
+
     const parsed = mercuryFileSchema.safeParse(rawYaml);
     if (!parsed.success) {
       const issues = parsed.error.issues

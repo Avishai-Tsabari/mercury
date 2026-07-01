@@ -1,6 +1,6 @@
 # Bug: Strict YAML schema crashes Mercury on unknown config keys
 
-**Status**: In-Progress
+**Status**: Fixed
 **Severity**: major
 **Slug**: strict-yaml-schema-crash
 **Reported**: 2026-07-01
@@ -63,3 +63,23 @@ With WABA, auth is a permanent API token — crash loops no longer revoke auth. 
 - Industry standard (Kubernetes, OpenCode/SST) is to warn on unknown keys, not crash. Zod's default behavior is `.strip()` (silently remove unknown keys) — Mercury explicitly opted into `.strict()` which is the most aggressive mode.
 - OpenCode hit the same bug and fixed it by switching to passthrough + warnings (github.com/sst/opencode/issues/6145).
 - The Baileys session loss is a known risk of the unofficial protocol — Meta actively discourages bot usage on consumer WhatsApp. WABA eliminates this class of risk entirely.
+
+---
+
+## Post-Mortem
+
+### Investigation
+Read `src/config-file.ts` — `mercuryFileSchema` and all 13 nested Zod object schemas used `.strict()`. The `mergeRawMercuryConfig()` function called `safeParse()` correctly but threw unconditionally on any parse failure, including unknown keys. The Zod `.strict()` mode treats unknown keys the same as type errors — both produce parse failures.
+
+### Root Cause
+`.strict()` on Zod object schemas rejects unknown keys with the same error severity as invalid values. There was no distinction between "unrecognized key" (safe to ignore) and "invalid value" (can't run). A renamed field (`admin_numbers` → `admin_ids`) caused Mercury to crash on startup, PM2's unlimited restarts amplified this into a crash loop, and the rapid reconnection pattern caused WhatsApp/Baileys to revoke the session.
+
+### Fix
+- **`src/config-file.ts`**: Replaced all 13 `.strict()` calls with `.strip()` (Zod default — silently removes unknown keys). Added `KNOWN_TOP_KEYS` and `KNOWN_SECTION_KEYS` static key sets, and a `warnUnknownKeys()` function that runs before parsing to log `[WARN]` messages for any unrecognized keys. Invalid values (wrong types, out-of-range numbers) still throw — only unknown keys are tolerated.
+- **`mergeRawMercuryConfig()`**: Added an optional `log` parameter (defaults to `console.warn`) so the warning function is testable. Called `warnUnknownKeys()` before `safeParse()`.
+- **`tests/config.test.ts`**: Added 4 tests: unknown top-level key warns but doesn't crash, unknown nested key warns, invalid value type still throws, valid config produces no warnings.
+
+### Lessons
+- Separate "unknown key" from "invalid value" in config validation — they have different severity and different correct responses.
+- Any feature that adds config fields must consider version mismatch — a user on version N with a yaml from version N+1 should not crash.
+- On Baileys, any crash loop is catastrophic — PM2 restart limits should be configured.

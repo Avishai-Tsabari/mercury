@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadConfig, resolveProjectPath } from "../src/config.js";
+import { mergeRawMercuryConfig } from "../src/config-file.js";
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
@@ -239,6 +240,121 @@ model:
       );
       process.env.MERCURY_CONFIG_FILE = yamlPath;
       expect(() => loadConfig()).toThrow(/mercury.yaml/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("mercury.yaml unknown keys", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith("MERCURY_")) delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith("MERCURY_")) delete process.env[key];
+    }
+    Object.assign(process.env, originalEnv);
+  });
+
+  test("unknown top-level key warns but does not crash", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `server:
+  port: 9000
+future_feature:
+  some_option: true
+`,
+        "utf-8",
+      );
+      const warnings: string[] = [];
+      const result = mergeRawMercuryConfig(
+        { MERCURY_CONFIG_FILE: yamlPath },
+        dir,
+        (msg) => warnings.push(msg),
+      );
+      expect(result.port).toBe(9000);
+      expect(warnings.length).toBe(1);
+      expect(warnings[0]).toContain("future_feature");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("unknown nested key warns but does not crash", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `dm_auto_space:
+  enabled: true
+  admin_numbers:
+    - "123"
+`,
+        "utf-8",
+      );
+      const warnings: string[] = [];
+      const result = mergeRawMercuryConfig(
+        { MERCURY_CONFIG_FILE: yamlPath },
+        dir,
+        (msg) => warnings.push(msg),
+      );
+      expect(result.dmAutoSpaceEnabled).toBe(true);
+      expect(warnings.length).toBe(1);
+      expect(warnings[0]).toContain("dm_auto_space.admin_numbers");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("invalid value type still throws", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `server:
+  port: "not_a_number"
+`,
+        "utf-8",
+      );
+      expect(() =>
+        mergeRawMercuryConfig({ MERCURY_CONFIG_FILE: yamlPath }, dir),
+      ).toThrow(/mercury.yaml/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("valid config produces no warnings", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `server:
+  port: 9000
+dm_auto_space:
+  enabled: true
+  admin_ids:
+    - "123"
+`,
+        "utf-8",
+      );
+      const warnings: string[] = [];
+      mergeRawMercuryConfig({ MERCURY_CONFIG_FILE: yamlPath }, dir, (msg) =>
+        warnings.push(msg),
+      );
+      expect(warnings).toHaveLength(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
