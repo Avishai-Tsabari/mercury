@@ -188,6 +188,8 @@ async function runAction(): Promise<void> {
   });
   if (imageCheck.status !== 0) {
     const isRegistryImage = imageName.includes("/");
+    let resolved = false;
+
     if (isRegistryImage) {
       console.log(`Image '${imageName}' not found locally, pulling...`);
       const pull = spawnSync("docker", ["pull", imageName], {
@@ -196,7 +198,36 @@ async function runAction(): Promise<void> {
       if (pull.signal) {
         process.exit(1);
       }
-      if (pull.status !== 0) {
+      if (pull.status === 0) {
+        resolved = true;
+      }
+    }
+
+    // Fallback: if the configured image isn't available (pull failed, not a
+    // registry image, or never pulled), try the local build tag.
+    if (!resolved) {
+      const localTag = "mercury-agent:latest";
+      if (imageName !== localTag) {
+        const localCheck = spawnSync("docker", ["image", "inspect", localTag], {
+          stdio: "pipe",
+        });
+        if (localCheck.status === 0) {
+          console.log(
+            `\nℹ️  Using locally built ${localTag} (configured image unavailable)\n`,
+          );
+          // Override in both process.env and envVars: the child is spawned with
+          // `{ ...process.env, ...envVars }`, so envVars (loaded from .env, which
+          // usually pins MERCURY_AGENT_IMAGE to the registry) wins the merge and
+          // would otherwise clobber this fallback.
+          process.env.MERCURY_AGENT_IMAGE = localTag;
+          envVars.MERCURY_AGENT_IMAGE = localTag;
+          resolved = true;
+        }
+      }
+    }
+
+    if (!resolved) {
+      if (isRegistryImage) {
         const firstSegment = imageName.split("/")[0];
         const registry = firstSegment.includes(".")
           ? firstSegment
@@ -204,13 +235,14 @@ async function runAction(): Promise<void> {
         console.error(`\nError: Failed to pull '${imageName}'.`);
         console.error(
           "If this is a private registry, authenticate first:\n" +
-            `  docker login ${registry}`,
+            `  docker login ${registry}\n` +
+            "Or build locally:\n" +
+            "  mercury build",
         );
-        process.exit(1);
+      } else {
+        console.error(`Error: Container image '${imageName}' not found.`);
+        console.error("Run 'mercury build' to build it.");
       }
-    } else {
-      console.error(`Error: Container image '${imageName}' not found.`);
-      console.error("Run 'mercury build' to build it.");
       process.exit(1);
     }
   }
