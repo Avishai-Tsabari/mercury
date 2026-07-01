@@ -40,6 +40,8 @@
 #   log_format: text
 #   rate_limit_per_user: 10
 #   rate_limit_window_ms: 60000
+#   rate_limit_daily_member: 0     # 0 = unlimited; global daily message cap for members
+#   rate_limit_daily_admin: 0      # 0 = unlimited; global daily message cap for admins
 
 # trigger:
 #   patterns: "@Mercury,Mercury"
@@ -73,3 +75,10 @@
 
 # permissions:
 #   admins: ""
+
+# dm_auto_space:
+#   enabled: false
+#   admin_numbers:                              # auto-link to "main" space
+#     - "972501234567"
+#   default_system_prompt: ""                   # seeded into auto-created customer spaces
+#   default_member_permissions: "prompt,prefs.get"  # restrict customers to chat only

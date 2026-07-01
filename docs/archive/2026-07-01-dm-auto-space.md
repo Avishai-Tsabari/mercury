@@ -1,6 +1,6 @@
 # Auto-Create Space per DM
 
-**Status**: In-Progress
+**Status**: Done
 **Slug**: dm-auto-space
 **Created**: 2026-06-30
 **Last updated**: 2026-07-01
@@ -224,17 +224,17 @@ Requires adding `rate_limit`, `rate_limit.member`, `rate_limit.admin` to `BUILTI
 - [x] Context for Claude pointers filled in
 
 ### Implementation (tick off as you go)
-- [ ] Step 1 — Add config fields to `config-file.ts` and `config.ts`
-- [ ] Step 2 — Add global daily rate limit fallback in `runtime.ts`
-- [ ] Step 3 — Add rate limit to dashboard + config-builtin
-- [ ] Step 4 — Implement auto-space logic in `resolveConversation()`
-- [ ] Step 5 — Thread config through handler → resolveConversation call chain
-- [ ] Step 6 — Write tests
-- [ ] Step 7 — Update example config
-- [ ] `bun run check` passes
-- [ ] No secrets or `.env` files committed
-- [ ] No unrelated files modified
-- [ ] All user stories verifiably met
+- [x] Step 1 — Add config fields to `config-file.ts` and `config.ts`
+- [x] Step 2 — Add global daily rate limit fallback in `runtime.ts`
+- [x] Step 3 — Add rate limit to dashboard + config-builtin
+- [x] Step 4 — Implement auto-space logic in `resolveConversation()`
+- [x] Step 5 — Thread config through handler → resolveConversation call chain
+- [x] Step 6 — Write tests
+- [x] Step 7 — Update example config
+- [x] `bun run check` passes
+- [x] No secrets or `.env` files committed
+- [x] No unrelated files modified
+- [x] All user stories verifiably met
 
 ---
 
@@ -254,15 +254,17 @@ Requires adding `rate_limit`, `rate_limit.member`, `rate_limit.admin` to `BUILTI
 > Fill this section when archiving.
 
 **Residual risks / follow-ups:**
-- Per-space AGENTS.md for auto-created spaces is empty by default; the global AGENTS.md applies but a dedicated customer-facing AGENTS.md template could improve quality
+- Per-space AGENTS.md for auto-created spaces is empty by default; the global AGENTS.md applies but a dedicated customer-facing template could improve quality — accepted
 - Business logic (appointment booking, etc.) must be handled by dedicated business extensions with deterministic code, NOT via LLM prompting → ideas/business-extensions.md
-- none
 
 **What changed from the plan:**
-- …
+- Steps 4 and 5 (auto-space logic + config threading) implemented together as they are tightly coupled
+- Added `.toLowerCase()` to `deriveSpaceId` for future non-numeric platform IDs (caught in code review)
+- `memory.ts` removed from modified files list — `ensureSpaceWorkspace` is already called lazily at container execution time
 
 **Key decisions made during implementation:**
-- …
+- Used `seedSpaceConfigIfAbsent` helper (read-before-write) instead of raw `setSpaceConfig` to avoid overwriting manual admin overrides
+- Author name sourced from `message.author.userName` (set from WhatsApp pushName) before `resolveConversation` — available before bridge normalization
 
 **Architecture impact** (update `docs/ARCHITECTURE.md` if any of these apply):
 - [ ] New package/module added

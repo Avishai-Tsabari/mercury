@@ -398,8 +398,17 @@ export class MercuryCoreRuntime {
       if (route.role !== "system") {
         const roleKey = `rate_limit.${route.role}`;
         const roleLimitRaw = this.db.getSpaceConfig(message.spaceId, roleKey);
-        if (roleLimitRaw !== null) {
-          const roleLimit = Number.parseInt(roleLimitRaw, 10);
+        const globalDailyLimit =
+          route.role === "member"
+            ? this.config.rateLimitDailyMember
+            : route.role === "admin"
+              ? this.config.rateLimitDailyAdmin
+              : 0;
+        const effectiveDailyRaw =
+          roleLimitRaw ??
+          (globalDailyLimit > 0 ? String(globalDailyLimit) : null);
+        if (effectiveDailyRaw !== null) {
+          const roleLimit = Number.parseInt(effectiveDailyRaw, 10);
           if (!Number.isNaN(roleLimit) && roleLimit > 0) {
             const daily = this.db.checkAndIncrementDailyUsage(
               message.spaceId,
@@ -416,7 +425,6 @@ export class MercuryCoreRuntime {
               };
             }
           }
-          // roleLimit === 0 means unlimited — skip daily check
         }
       }
 

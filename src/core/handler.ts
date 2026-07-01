@@ -3,7 +3,11 @@ import { telegramInboundLooksLikeMedia } from "../bridges/telegram.js";
 import type { AppConfig } from "../config.js";
 import { logger } from "../logger.js";
 import type { NormalizeContext, PlatformBridge } from "../types.js";
-import { inferConversationKind, resolveConversation } from "./conversation.js";
+import {
+  type AutoSpaceConfig,
+  inferConversationKind,
+  resolveConversation,
+} from "./conversation.js";
 import type { MercuryCoreRuntime } from "./runtime.js";
 import { loadTriggerConfig, matchTrigger } from "./trigger.js";
 
@@ -20,6 +24,19 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
     .split(",")
     .map((s: string) => s.trim())
     .filter(Boolean);
+
+  const autoSpaceConfig: AutoSpaceConfig | undefined = config.dmAutoSpaceEnabled
+    ? {
+        enabled: true,
+        adminNumbers: config.dmAutoSpaceAdminNumbers
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        defaultSystemPrompt: config.dmAutoSpaceDefaultSystemPrompt,
+        defaultMemberPermissions: config.dmAutoSpaceDefaultMemberPermissions,
+        rateLimitDailyMember: config.rateLimitDailyMember,
+      }
+    : undefined;
 
   return async (
     adapter: Adapter,
@@ -52,6 +69,9 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
         bridge.platform,
         externalId,
         kind,
+        undefined,
+        autoSpaceConfig,
+        message.author.userName ?? message.author.fullName,
       );
 
       if (!resolution) {

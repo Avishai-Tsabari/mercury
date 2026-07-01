@@ -169,6 +169,8 @@ const schema = z.object({
     .min(1000)
     .max(60 * 60 * 1000)
     .default(60 * 1000), // 1 minute
+  rateLimitDailyMember: z.coerce.number().int().min(0).max(10000).default(0),
+  rateLimitDailyAdmin: z.coerce.number().int().min(0).max(10000).default(0),
 
   // ─── Server ─────────────────────────────────────────────────────────
   port: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -247,6 +249,12 @@ const schema = z.object({
   googleApplicationCredentials: z.string().optional(),
   /** Max input characters per /api/tts request (clamped 500–10000). */
   ttsMaxChars: z.coerce.number().int().min(500).max(10_000).default(5000),
+
+  // ─── DM Auto-Space ─────────────────────────────────────────────────
+  dmAutoSpaceEnabled: booleanFromEnv.default(false),
+  dmAutoSpaceAdminNumbers: z.string().default(""),
+  dmAutoSpaceDefaultSystemPrompt: z.string().default(""),
+  dmAutoSpaceDefaultMemberPermissions: z.string().default("prompt,prefs.get"),
 });
 
 export type AppConfig = z.infer<typeof schema> & {

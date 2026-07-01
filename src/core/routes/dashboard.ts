@@ -423,6 +423,71 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     `;
   }
 
+  function renderRateLimitPanel(
+    spaceId: string,
+    spacePageReload: string,
+  ): string {
+    const cfg = core.config;
+    const burstRaw = core.db.getSpaceConfig(spaceId, "rate_limit");
+    const memberRaw = core.db.getSpaceConfig(spaceId, "rate_limit.member");
+    const adminRaw = core.db.getSpaceConfig(spaceId, "rate_limit.admin");
+
+    const effectiveBurst = burstRaw ?? String(cfg.rateLimitPerUser);
+    const effectiveMember =
+      memberRaw ??
+      (cfg.rateLimitDailyMember > 0 ? String(cfg.rateLimitDailyMember) : "0");
+    const effectiveAdmin =
+      adminRaw ??
+      (cfg.rateLimitDailyAdmin > 0 ? String(cfg.rateLimitDailyAdmin) : "0");
+
+    const hasOverride = (key: string) =>
+      core.db.getSpaceConfig(spaceId, key) !== null;
+
+    const resetBtn = (key: string) =>
+      hasOverride(key)
+        ? `<button type="button" class="btn btn-sm" title="Use project default"
+             hx-delete="/dashboard/api/space-config?spaceId=${encodeURIComponent(spaceId)}&key=${encodeURIComponent(key)}"
+             hx-swap="none"
+             hx-on::after-request="${spacePageReload}">Reset</button>`
+        : "";
+
+    const sid = escapeHtml(spaceId);
+
+    const numRow = (label: string, key: string, value: string) => {
+      const desc = BUILTIN_CONFIG_DESCRIPTIONS[key];
+      const titleAttr = desc ? ` title="${escapeHtml(desc)}"` : "";
+      return `<div class="role-row" style="flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="min-width:160px;font-weight:500"${titleAttr}>${escapeHtml(label)}</span>
+      <form style="display:flex;gap:8px;align-items:center;flex:1;flex-wrap:wrap" class="trigger-cfg-form"
+            hx-post="/dashboard/api/space-config" hx-swap="none" hx-on::after-request="${spacePageReload}">
+        <input type="hidden" name="spaceId" value="${sid}" />
+        <input type="hidden" name="key" value="${escapeHtml(key)}" />
+        <input type="number" name="value" class="select" value="${escapeHtml(value)}" min="0" required style="width:80px" />
+        <button type="submit" class="btn btn-sm">Save</button>
+      </form>
+      ${resetBtn(key)}
+    </div>`;
+    };
+
+    return `
+      <p class="muted" style="margin-bottom:10px;line-height:1.5">
+        <strong>Project default</strong> (from env / mercury.yaml):
+        burst <span class="mono">${cfg.rateLimitPerUser}/min</span>,
+        daily member <span class="mono">${cfg.rateLimitDailyMember === 0 ? "unlimited" : String(cfg.rateLimitDailyMember)}</span>,
+        daily admin <span class="mono">${cfg.rateLimitDailyAdmin === 0 ? "unlimited" : String(cfg.rateLimitDailyAdmin)}</span>.
+      </p>
+      <p class="muted" style="margin-bottom:16px;line-height:1.5;font-size:0.92em">
+        <strong>Effective</strong> for this space:
+        burst <span class="mono">${escapeHtml(effectiveBurst)}/min</span>,
+        daily member <span class="mono">${effectiveMember === "0" ? "unlimited" : escapeHtml(effectiveMember)}/day</span>,
+        daily admin <span class="mono">${effectiveAdmin === "0" ? "unlimited" : escapeHtml(effectiveAdmin)}/day</span>
+      </p>
+      ${numRow("rate_limit", "rate_limit", effectiveBurst)}
+      ${numRow("rate_limit.member", "rate_limit.member", effectiveMember)}
+      ${numRow("rate_limit.admin", "rate_limit.admin", effectiveAdmin)}
+    `;
+  }
+
   function renderModelBlock(cfg: AppConfig): string {
     const legs = cfg.resolvedModelChain;
     if (legs.length === 0) {
@@ -1077,6 +1142,7 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     );
 
     const contextHtml = renderContextPanel(spaceId, spacePageReload);
+    const rateLimitHtml = renderRateLimitPanel(spaceId, spacePageReload);
 
     const configHtml =
       configEntriesFiltered.length > 0
@@ -1155,6 +1221,11 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       <div class="panel">
         <div class="panel-header">Context</div>
         <div class="panel-body">${raw(contextHtml)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">Rate limits</div>
+        <div class="panel-body">${raw(rateLimitHtml)}</div>
       </div>
 
       <div class="grid-2">

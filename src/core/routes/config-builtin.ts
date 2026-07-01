@@ -10,6 +10,9 @@ export const BUILTIN_CONFIG_KEYS = new Set([
   "context.window_size",
   "context.reply_chain_depth",
   "security.sensitive_connections_allowed",
+  "rate_limit",
+  "rate_limit.member",
+  "rate_limit.admin",
 ]);
 
 /**
@@ -37,6 +40,12 @@ export const BUILTIN_CONFIG_DESCRIPTIONS: Record<string, string> = {
     "Max number of turns walked back when following a reply chain. Integer 1-50.",
   "security.sensitive_connections_allowed":
     "When true, sensitive integrations (e.g. payments, identity) are usable in this group space. False blocks them by default.",
+  rate_limit:
+    "Per-user burst rate limit (messages per window). Overrides global rate_limit_per_user for this space. Integer ≥ 1, or 0 for unlimited.",
+  "rate_limit.member":
+    "Daily message cap for members in this space. Overrides global rate_limit_daily_member. Integer ≥ 1, or 0 for unlimited.",
+  "rate_limit.admin":
+    "Daily message cap for admins in this space. Overrides global rate_limit_daily_admin. Integer ≥ 1, or 0 for unlimited.",
 };
 
 const BUILTIN_VALIDATORS: Record<string, (v: string) => string | null> = {
@@ -76,6 +85,24 @@ const BUILTIN_VALIDATORS: Record<string, (v: string) => string | null> = {
     ["true", "false"].includes(v)
       ? null
       : "Invalid security.sensitive_connections_allowed value. Valid: true, false",
+  rate_limit: (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n >= 0 && n <= 1000
+      ? null
+      : "Invalid rate_limit value. Must be an integer between 0 and 1000";
+  },
+  "rate_limit.member": (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n >= 0 && n <= 10000
+      ? null
+      : "Invalid rate_limit.member value. Must be an integer between 0 and 10000";
+  },
+  "rate_limit.admin": (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n >= 0 && n <= 10000
+      ? null
+      : "Invalid rate_limit.admin value. Must be an integer between 0 and 10000";
+  },
 };
 
 export function isBuiltinConfigKey(key: string): boolean {

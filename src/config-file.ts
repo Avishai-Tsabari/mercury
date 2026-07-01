@@ -85,6 +85,8 @@ const mercuryFileSchema = z
           .min(1000)
           .max(60 * 60 * 1000)
           .optional(),
+        rate_limit_daily_member: z.number().int().min(0).max(10000).optional(),
+        rate_limit_daily_admin: z.number().int().min(0).max(10000).optional(),
       })
       .strict()
       .optional(),
@@ -161,6 +163,16 @@ const mercuryFileSchema = z
       })
       .strict()
       .optional(),
+
+    dm_auto_space: z
+      .object({
+        enabled: z.boolean().optional(),
+        admin_numbers: z.array(z.string()).optional(),
+        default_system_prompt: z.string().optional(),
+        default_member_permissions: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -233,6 +245,12 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
   if (f.runtime?.rate_limit_window_ms != null) {
     o.rateLimitWindowMs = f.runtime.rate_limit_window_ms;
   }
+  if (f.runtime?.rate_limit_daily_member != null) {
+    o.rateLimitDailyMember = f.runtime.rate_limit_daily_member;
+  }
+  if (f.runtime?.rate_limit_daily_admin != null) {
+    o.rateLimitDailyAdmin = f.runtime.rate_limit_daily_admin;
+  }
 
   if (f.scheduling?.default_timezone != null) {
     o.defaultTimezone = f.scheduling.default_timezone;
@@ -272,6 +290,20 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
   if (f.media?.max_size_mb != null) o.mediaMaxSizeMb = f.media.max_size_mb;
 
   if (f.permissions?.admins != null) o.admins = f.permissions.admins;
+
+  if (f.dm_auto_space?.enabled != null) {
+    o.dmAutoSpaceEnabled = f.dm_auto_space.enabled;
+  }
+  if (f.dm_auto_space?.admin_numbers != null) {
+    o.dmAutoSpaceAdminNumbers = f.dm_auto_space.admin_numbers.join(",");
+  }
+  if (f.dm_auto_space?.default_system_prompt != null) {
+    o.dmAutoSpaceDefaultSystemPrompt = f.dm_auto_space.default_system_prompt;
+  }
+  if (f.dm_auto_space?.default_member_permissions != null) {
+    o.dmAutoSpaceDefaultMemberPermissions =
+      f.dm_auto_space.default_member_permissions;
+  }
 
   return o;
 }
@@ -335,6 +367,13 @@ const CAMEL_TO_ENV: Record<string, string> = {
   googleApplicationCredentials: "MERCURY_GOOGLE_APPLICATION_CREDENTIALS",
   ttsMaxChars: "MERCURY_TTS_MAX_CHARS",
   defaultTimezone: "MERCURY_DEFAULT_TIMEZONE",
+  rateLimitDailyMember: "MERCURY_RATE_LIMIT_DAILY_MEMBER",
+  rateLimitDailyAdmin: "MERCURY_RATE_LIMIT_DAILY_ADMIN",
+  dmAutoSpaceEnabled: "MERCURY_DM_AUTO_SPACE_ENABLED",
+  dmAutoSpaceAdminNumbers: "MERCURY_DM_AUTO_SPACE_ADMIN_NUMBERS",
+  dmAutoSpaceDefaultSystemPrompt: "MERCURY_DM_AUTO_SPACE_DEFAULT_SYSTEM_PROMPT",
+  dmAutoSpaceDefaultMemberPermissions:
+    "MERCURY_DM_AUTO_SPACE_DEFAULT_MEMBER_PERMISSIONS",
 };
 
 function envValueForSchema(
