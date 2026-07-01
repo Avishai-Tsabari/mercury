@@ -188,6 +188,45 @@ export interface WidgetDef {
 }
 
 // ---------------------------------------------------------------------------
+// Capabilities — host-side broker actions invoked from the container
+// ---------------------------------------------------------------------------
+
+/** A single broker request, dispatched from `POST /api/capability/:name/:action`. */
+export interface CapabilityRequest {
+  /** Capability name (matches the required permission). */
+  name: string;
+  /** Sub-action within the capability (e.g. "book", "cancel"). */
+  action: string;
+  /**
+   * The authoritative, token-derived caller id. Trustworthy for ownership
+   * checks — NOT a container-supplied argument.
+   */
+  callerId: string;
+  /** The space the call was made from. */
+  spaceId: string;
+  /** Parsed JSON request body (or null). */
+  body: unknown;
+}
+
+/** Result returned by a capability handler. */
+export interface CapabilityResult {
+  /** HTTP status to return (default 200). */
+  status?: number;
+  /** JSON-serializable response payload. */
+  data: unknown;
+}
+
+/**
+ * Host-side handler for a capability. Runs in the Mercury host process with the
+ * full extension context (credentials in host storage stay on the host). The
+ * container never sees secrets — only the returned `data`.
+ */
+export type CapabilityHandler = (
+  req: CapabilityRequest,
+  ctx: MercuryExtensionContext,
+) => Promise<CapabilityResult>;
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
@@ -309,6 +348,20 @@ export interface MercuryExtensionAPI {
    * });
    */
   connection(def: ConnectionDef): void;
+
+  /**
+   * Register a host-side capability handler, invoked from the container via
+   * `mrctl capability <name> <action> <json>` → `POST /api/capability/:name/:action`.
+   * The caller must hold the `<name>` permission. Credentials used by the
+   * handler stay on the host and never enter the agent container.
+   *
+   * @example
+   * mercury.capability("barber", async (req, ctx) => {
+   *   if (req.action === "book") return { data: await book(req.callerId, req.body) };
+   *   return { status: 400, data: { error: "unknown action" } };
+   * });
+   */
+  capability(name: string, handler: CapabilityHandler): void;
 
   /** Scoped key-value store for persistent extension state. */
   readonly store: ExtensionStore;
@@ -448,6 +501,8 @@ export interface ExtensionMeta {
   configs: Map<string, ConfigDef>;
   /** Dashboard widgets. */
   widgets: WidgetDef[];
+  /** Host-side capability handlers, keyed by capability name. */
+  capabilities: Map<string, CapabilityHandler>;
   /** Declared environment variables. */
   envVars: EnvDef[];
   /** Personal service connection metadata, if declared via `mercury.connection()`. */

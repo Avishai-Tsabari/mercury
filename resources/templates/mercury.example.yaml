@@ -82,3 +82,18 @@
 #     - "972501234567"
 #   default_system_prompt: ""                   # seeded into auto-created customer spaces
 #   default_member_permissions: "prompt,prefs.get"  # restrict customers to chat only
+
+# ─── Applicative profile ────────────────────────────────────────────────────
+# A profile wraps raw capabilities with deterministic business logic and scopes
+# what members may do. Apply one with `mercury profile apply <name|path|git-url>`
+# (it persists to .mercury/active-profile.json and is loaded at startup).
+# The active profile's member_permissions become the EXHAUSTIVE member set, and
+# its capabilities run host-side via `mrctl capability <name> <action>` so
+# credentials never enter the agent container.
+#
+# Env-only override of the active profile name (informational):
+#   MERCURY_PROFILE=barber-appointments
+#
+# Host-only signing key for per-turn caller tokens (auto-generated if unset;
+# only set when the API and container-runner run in separate processes):
+#   MERCURY_CALLER_TOKEN_KEY=<random-secret>

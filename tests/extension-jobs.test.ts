@@ -51,6 +51,7 @@ function makeExt(overrides: Partial<ExtensionMeta> = {}): ExtensionMeta {
     jobs: new Map(),
     configs: new Map(),
     widgets: [],
+    capabilities: new Map(),
     ...overrides,
   };
 }

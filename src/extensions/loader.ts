@@ -14,6 +14,7 @@ import { MercuryExtensionAPIImpl } from "./api.js";
 import type { ConfigRegistry } from "./config-registry.js";
 import { RESERVED_EXTENSION_NAMES } from "./reserved.js";
 import type {
+  CapabilityHandler,
   EventHandler,
   ExtensionMeta,
   JobDef,
@@ -180,6 +181,20 @@ export class ExtensionRegistry {
   /** Get extensions that declare a CLI. */
   getCliExtensions(): ExtensionMeta[] {
     return this.list().filter((ext) => ext.clis.length > 0);
+  }
+
+  /**
+   * Find a registered host-side capability handler by name, with its owning
+   * extension. Returns undefined when no extension registered it.
+   */
+  getCapability(
+    name: string,
+  ): { ext: ExtensionMeta; handler: CapabilityHandler } | undefined {
+    for (const ext of this.extensions.values()) {
+      const handler = ext.capabilities.get(name);
+      if (handler) return { ext, handler };
+    }
+    return undefined;
   }
 
   /** Get all env var source names claimed by extensions (for passthrough filtering). */

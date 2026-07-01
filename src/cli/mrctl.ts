@@ -96,6 +96,7 @@ Built-in commands:
   mrctl compact
   mrctl clear
   mrctl recall <search text> [--limit N]
+  mrctl capability <name> <action> [json-body]
   mrctl tts synthesize --text "Hello" --out outbox/reply.mp3 \\
       [--language auto|he-IL|en-US] [--provider google|azure|auto]
 Environment:
@@ -129,6 +130,23 @@ async function main() {
   switch (cmd) {
     case "whoami": {
       print(await api("GET", "/api/whoami"));
+      break;
+    }
+
+    case "capability": {
+      // mrctl capability <name> <action> [json-body]
+      const name = requireArg(args, 1, "capability name");
+      const action = requireArg(args, 2, "action");
+      const rawBody = args[3];
+      let body: unknown;
+      if (rawBody !== undefined) {
+        try {
+          body = JSON.parse(rawBody);
+        } catch {
+          fatal("body must be valid JSON");
+        }
+      }
+      print(await api("POST", `/api/capability/${name}/${action}`, body));
       break;
     }
 

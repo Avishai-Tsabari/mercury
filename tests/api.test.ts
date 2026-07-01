@@ -14,6 +14,7 @@ import {
 import { SpaceQueue } from "../src/core/space-queue.js";
 import { ConfigRegistry } from "../src/extensions/config-registry.js";
 import { ExtensionRegistry } from "../src/extensions/loader.js";
+import { logger } from "../src/logger.js";
 import { Db } from "../src/storage/db.js";
 
 let tmpDir: string;
@@ -22,6 +23,7 @@ let queue: SpaceQueue;
 let config: AppConfig;
 let triggeredTasks: number[];
 let app: Hono<Env>;
+let registry: ExtensionRegistry;
 
 // Minimal container runner - tracks abort calls
 const containerRunner = {
@@ -111,19 +113,23 @@ beforeEach(() => {
     whatsappAuthDir: path.join(tmpDir, "whatsapp"),
   } as AppConfig;
 
+  registry = new ExtensionRegistry();
   app = createApiApp({
     db,
     config,
     containerRunner,
     queue,
     scheduler,
-    registry: new ExtensionRegistry(),
+    registry,
     configRegistry: new ConfigRegistry(),
   });
 });
 
 afterEach(async () => {
   db.close();
+  // Loading a fixture extension registers a permission globally; clear it so
+  // capability tests don't leak "echo" into other suites.
+  resetPermissions();
   // On Windows, SQLite releases the file handle asynchronously after close().
   // Retry rmSync with backoff to avoid EBUSY errors.
   for (let i = 0; i < 5; i++) {
@@ -134,6 +140,69 @@ afterEach(async () => {
       await new Promise((r) => setTimeout(r, 100 * (i + 1)));
     }
   }
+});
+
+// ─── Capability broker ──────────────────────────────────────────────────────
+
+describe("capability broker", () => {
+  async function loadEchoCapability(): Promise<void> {
+    const extRoot = path.join(tmpDir, "exts");
+    const echoDir = path.join(extRoot, "echo");
+    fs.mkdirSync(echoDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(echoDir, "index.ts"),
+      `export default function (m) {
+  m.permission({ defaultRoles: [] });
+  m.capability("echo", async (req) => ({
+    data: { sawCaller: req.callerId, action: req.action, echoed: req.body },
+  }));
+}
+`,
+    );
+    await registry.loadAll(extRoot, db, logger);
+  }
+
+  test("dispatches to the handler with the token-derived caller", async () => {
+    await loadEchoCapability();
+    const token = mintCallerToken(
+      {
+        callerId: "admin1",
+        spaceId: "group1",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+      config.callerTokenKey,
+    );
+    const res = await app.request("/capability/echo/ping", {
+      method: "POST",
+      headers: {
+        // Spoofed header claims a different caller; the token must win.
+        "x-mercury-caller": "attacker",
+        "x-mercury-space": "group1",
+        "x-mercury-token": token,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ hello: "world" }),
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Record<string, unknown>;
+    expect(data.sawCaller).toBe("admin1");
+    expect(data.action).toBe("ping");
+    expect(data.echoed).toEqual({ hello: "world" });
+  });
+
+  test("denies a caller lacking the capability permission", async () => {
+    await loadEchoCapability();
+    const res = await app.request("/capability/echo/ping", {
+      method: "POST",
+      headers: {
+        "x-mercury-caller": "member1",
+        "x-mercury-space": "group1",
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(res.status).toBe(403);
+  });
 });
 
 // ─── Auth ─────────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ function makeMeta(
     jobs: new Map(),
     configs: new Map(),
     widgets: [],
+    capabilities: new Map(),
     envVars: [],
   };
 }

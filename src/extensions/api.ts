@@ -11,6 +11,7 @@ import type { ModelCapabilityKey } from "../agent/model-capabilities.js";
 import { registerPermission } from "../core/permissions.js";
 import type { Db } from "../storage/db.js";
 import type {
+  CapabilityHandler,
   CliDef,
   ConfigDef,
   ConnectionCategory,
@@ -63,6 +64,7 @@ export class MercuryExtensionAPIImpl implements MercuryExtensionAPI {
       jobs: new Map(),
       configs: new Map(),
       widgets: [],
+      capabilities: new Map(),
       envVars: [],
     };
   }
@@ -233,6 +235,25 @@ export class MercuryExtensionAPIImpl implements MercuryExtensionAPI {
     // validated in the loader after setup() returns, because mercury.connection()
     // may legitimately be called before mercury.env() inside setup.
     this.meta.connection = def;
+  }
+
+  capability(name: string, handler: CapabilityHandler): void {
+    if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+      throw new Error(
+        `Extension "${this.name}": capability() requires a lowercase alphanumeric name`,
+      );
+    }
+    if (typeof handler !== "function") {
+      throw new Error(
+        `Extension "${this.name}": capability("${name}") requires a handler function`,
+      );
+    }
+    if (this.meta.capabilities.has(name)) {
+      throw new Error(
+        `Extension "${this.name}": capability "${name}" already registered`,
+      );
+    }
+    this.meta.capabilities.set(name, handler);
   }
 
   get store(): ExtensionStore {
