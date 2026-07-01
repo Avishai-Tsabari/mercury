@@ -275,6 +275,38 @@ export function createConsoleApp(opts: {
     return c.json({ connections });
   });
 
+  /* ── Credential injection ────────────────────────────────────── */
+
+  app.post("/credentials", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      envVar?: string;
+      value?: string;
+      restart?: boolean;
+    };
+
+    const envVar = typeof body.envVar === "string" ? body.envVar.trim() : "";
+    const value = typeof body.value === "string" ? body.value : "";
+    const shouldRestart = body.restart !== false;
+
+    if (!envVar || !/^[A-Z_][A-Z0-9_]*$/.test(envVar)) {
+      return c.json(
+        { error: "envVar must be a valid SCREAMING_SNAKE_CASE name" },
+        400,
+      );
+    }
+
+    const envPath = path.join(opts.projectRoot, ".env");
+    updateDotEnv(envPath, { [envVar]: value || null });
+    logger.info(`Console: credential written`, { envVar, removed: !value });
+
+    if (shouldRestart && value) {
+      setTimeout(() => process.kill(process.pid, "SIGTERM"), 500);
+      return c.json({ ok: true, envVar, restarting: true });
+    }
+
+    return c.json({ ok: true, envVar, restarting: false });
+  });
+
   /* ── Adapter management ──────────────────────────────────────── */
 
   /** Return current adapter enable/disable state and credential presence. */
