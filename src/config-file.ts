@@ -450,6 +450,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   mediaEnabled: "MERCURY_MEDIA_ENABLED",
   mediaMaxSizeMb: "MERCURY_MEDIA_MAX_SIZE_MB",
   admins: "MERCURY_ADMINS",
+  profile: "MERCURY_PROFILE",
   apiSecret: "MERCURY_API_SECRET",
   callerTokenKey: "MERCURY_CALLER_TOKEN_KEY",
   chatApiKey: "MERCURY_CHAT_API_KEY",

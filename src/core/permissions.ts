@@ -77,6 +77,33 @@ export function isValidPermission(name: string): boolean {
  */
 export function resetPermissions(): void {
   registeredPermissions.clear();
+  activeProfileMemberPermissions = null;
+}
+
+// ---------------------------------------------------------------------------
+// Active applicative profile (project-wide)
+// ---------------------------------------------------------------------------
+
+/**
+ * Member permission set imposed by the active applicative profile, if any.
+ * Project-wide (one profile per deployment): set once at startup from the
+ * persisted profile activation. When non-null it is the EXHAUSTIVE member
+ * permission set — no extension defaults are merged — so raw capabilities stay
+ * admin-only unless the profile lists them. A per-space
+ * `role.member.permissions` override still takes precedence over this.
+ */
+let activeProfileMemberPermissions: string[] | null = null;
+
+/** Set (or clear, with null) the active profile's member permission set. */
+export function setActiveProfileMemberPermissions(
+  permissions: string[] | null,
+): void {
+  activeProfileMemberPermissions = permissions;
+}
+
+/** Parse a permission list into a validated set (drops unknown names). */
+function toPermissionSet(list: string[]): Set<string> {
+  return new Set(list.map((s) => s.trim()).filter((s) => isValidPermission(s)));
 }
 
 // ---------------------------------------------------------------------------
@@ -155,12 +182,16 @@ export function getRolePermissions(
   const key = `role.${role}.permissions`;
   const stored = db.getSpaceConfig(spaceId, key);
 
+  // Explicit per-space override wins over everything.
   if (stored !== null) {
-    const perms = stored
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => isValidPermission(s));
-    return new Set(perms);
+    return toPermissionSet(stored.split(","));
+  }
+
+  // An active profile sets the exhaustive member permission set (project-wide),
+  // ahead of built-in/extension defaults. Members only; profiles never widen
+  // admin/system.
+  if (role === "member" && activeProfileMemberPermissions !== null) {
+    return toPermissionSet(activeProfileMemberPermissions);
   }
 
   return getDefaultPermissions(role);

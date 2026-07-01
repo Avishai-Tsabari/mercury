@@ -207,6 +207,14 @@ const schema = z.object({
   // ─── Permissions ────────────────────────────────────────────────────
   admins: z.string().default(""),
 
+  // ─── Applicative Profile ────────────────────────────────────────────
+  /**
+   * Name of the active applicative profile (informational at runtime; the
+   * authoritative activation is persisted to `.mercury/active-profile.json`
+   * by `applyProfile`). Env-only.
+   */
+  profile: z.string().optional(),
+
   // ─── Security ─────────────────────────────────────────────────────
   /** Shared secret for API authentication. Required for /api/* routes. */
   apiSecret: z.string().optional(),

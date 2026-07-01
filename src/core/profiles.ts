@@ -6,9 +6,11 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
 // ─── Profile Schema ───────────────────────────────────────────────────────
@@ -50,93 +52,27 @@ export const profileSchema = z.object({
   extensions: z.array(profileExtensionSchema).default([]),
   env: z.array(profileEnvVarSchema).default([]),
   defaults: profileDefaultsSchema.optional(),
+
+  // ─── Applicative runtime fields ─────────────────────────────────────────
+  /**
+   * Raw capability extensions this profile requires to be installed (e.g.
+   * ["gws"]). Validated at apply time — activation fails loudly if any are
+   * missing. The profile wraps these host-side; they are NOT exposed to
+   * members unless also listed in `member_permissions`.
+   */
+  capabilities: z.array(z.string()).default([]),
+  /**
+   * Exhaustive member permission set while this profile is active. When set,
+   * this REPLACES the default member permissions (no extension defaults are
+   * merged), so raw capabilities stay admin-only unless explicitly listed.
+   */
+  member_permissions: z.array(z.string()).optional(),
+  /** Profile-specific agent persona, injected into the container. */
+  system_prompt: z.string().optional(),
 });
 
 export type MercuryProfile = z.infer<typeof profileSchema>;
 export type ProfileEnvVar = z.infer<typeof profileEnvVarSchema>;
-
-// ─── YAML Parsing (lightweight, no dependency) ────────────────────────────
-
-function parseSimpleYaml(content: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const lines = content.split("\n");
-  let currentKey = "";
-  let currentArray: unknown[] | null = null;
-  let currentObject: Record<string, unknown> | null = null;
-
-  for (const raw of lines) {
-    const line = raw.replace(/\r$/, "");
-    if (!line.trim() || line.trim().startsWith("#")) continue;
-
-    // Top-level key: value
-    const topMatch = line.match(/^([a-z_]+):\s*(.*)$/);
-    if (topMatch) {
-      if (currentArray && currentKey) {
-        result[currentKey] = currentArray;
-        currentArray = null;
-      }
-      const [, key, value] = topMatch;
-      currentKey = key;
-      if (value) {
-        result[key] = value.replace(/^["']|["']$/g, "");
-      }
-      continue;
-    }
-
-    // Array item: "  - key: value" or "  - value"
-    const arrayItemMatch = line.match(/^\s+-\s+(.+)$/);
-    if (arrayItemMatch) {
-      if (!currentArray) currentArray = [];
-      const item = arrayItemMatch[1];
-
-      // Check if it's a "key: value" object entry
-      const kvMatch = item.match(/^([a-z_]+):\s*(.*)$/);
-      if (kvMatch) {
-        currentObject = { [kvMatch[1]]: parseYamlValue(kvMatch[2]) };
-        currentArray.push(currentObject);
-      } else {
-        currentObject = null;
-        currentArray.push(parseYamlValue(item));
-      }
-      continue;
-    }
-
-    // Nested key inside array object: "    key: value"
-    const nestedMatch = line.match(/^\s{4,}([a-z_]+):\s*(.*)$/);
-    if (nestedMatch && currentObject) {
-      currentObject[nestedMatch[1]] = parseYamlValue(nestedMatch[2]);
-      continue;
-    }
-
-    // Nested key for non-array objects (e.g., defaults section)
-    const subMatch = line.match(/^\s{2}([a-z_]+):\s*(.*)$/);
-    if (subMatch && currentKey && !currentArray) {
-      if (
-        typeof result[currentKey] !== "object" ||
-        result[currentKey] === null
-      ) {
-        result[currentKey] = {};
-      }
-      (result[currentKey] as Record<string, unknown>)[subMatch[1]] =
-        parseYamlValue(subMatch[2]);
-    }
-  }
-
-  if (currentArray && currentKey) {
-    result[currentKey] = currentArray;
-  }
-
-  return result;
-}
-
-function parseYamlValue(raw: string): string | number | boolean {
-  const trimmed = raw.replace(/^["']|["']$/g, "").trim();
-  if (trimmed === "true") return true;
-  if (trimmed === "false") return false;
-  const num = Number(trimmed);
-  if (!Number.isNaN(num) && trimmed !== "") return num;
-  return trimmed;
-}
 
 // ─── Profile Loading ──────────────────────────────────────────────────────
 
@@ -147,7 +83,7 @@ export function loadProfileFromDir(dir: string): MercuryProfile {
   }
 
   const content = readFileSync(yamlPath, "utf-8");
-  const parsed = parseSimpleYaml(content);
+  const parsed = parseYaml(content) ?? {};
   return profileSchema.parse(parsed);
 }
 
@@ -224,6 +160,79 @@ export function applyProfile(
         cpSync(extSrc, extDst, { recursive: true });
       }
     }
+  }
+
+  // Validate required capabilities are installed. A profile wraps raw
+  // capability extensions (e.g. "gws") host-side; if one is missing the profile
+  // cannot function, so fail loudly rather than degrade silently.
+  validateProfileCapabilities(profile, dataDir);
+
+  // Persist the runtime activation so the server can pick it up at startup
+  // (the manifest itself is not copied into .mercury).
+  persistActiveProfile(profile, dataDir);
+}
+
+/** Runtime activation record persisted by `applyProfile`, read at startup. */
+export interface ActiveProfile {
+  name: string;
+  /** Exhaustive member permission set, or null when the profile doesn't scope members. */
+  memberPermissions: string[] | null;
+  /** Profile agent persona, or null. */
+  systemPrompt: string | null;
+}
+
+const ACTIVE_PROFILE_FILE = "active-profile.json";
+
+/** Write the active profile activation record to `<dataDir>/active-profile.json`. */
+export function persistActiveProfile(
+  profile: MercuryProfile,
+  dataDir: string,
+): void {
+  const activation: ActiveProfile = {
+    name: profile.name,
+    memberPermissions: profile.member_permissions ?? null,
+    systemPrompt: profile.system_prompt ?? null,
+  };
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(
+    join(dataDir, ACTIVE_PROFILE_FILE),
+    JSON.stringify(activation, null, 2),
+  );
+}
+
+/** Read the persisted active profile, or null when none is applied / unreadable. */
+export function loadActiveProfile(dataDir: string): ActiveProfile | null {
+  const file = join(dataDir, ACTIVE_PROFILE_FILE);
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, "utf-8")) as ActiveProfile;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Throw if any of the profile's declared `capabilities` is not present as an
+ * installed extension directory under `<dataDir>/extensions`. Capabilities may
+ * be satisfied either by a bundled/pre-installed extension or by one the
+ * profile itself ships in `extensions`.
+ */
+export function validateProfileCapabilities(
+  profile: MercuryProfile,
+  dataDir: string,
+): void {
+  if (profile.capabilities.length === 0) return;
+
+  const extensionsDir = join(dataDir, "extensions");
+  const missing = profile.capabilities.filter(
+    (cap) => !existsSync(join(extensionsDir, cap)),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Profile "${profile.name}" requires capabilities that are not installed: ` +
+        `${missing.join(", ")}. Install them (e.g. \`mercury add ${missing[0]}\`) before applying this profile.`,
+    );
   }
 }
 
