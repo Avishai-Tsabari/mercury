@@ -37,3 +37,4 @@ docs/TODOS.md
 !.env.example
 NEXT-STEPS.md
 .githooks/
+skills-lock.json

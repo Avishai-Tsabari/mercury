@@ -71,7 +71,7 @@ For each mapped setting, `mergeRawMercuryConfig` applies:
 | YAML parse, Zod file schema, flatten, merge | `src/config-file.ts` |
 | Shared model-leg validation | `src/config-model-chain.ts` |
 | `loadConfig`, Zod app schema | `src/config.ts` |
-| Tests | `tests/config.test.ts` (+ guards in `router.test.ts`, `session-context-estimate.test.ts`) |
+| Tests | `tests/config.test.ts` (+ guards in `router.test.ts`) |
 | Template | `resources/templates/mercury.example.yaml` |
 | Operator guide | `docs/configuration.md` |
 

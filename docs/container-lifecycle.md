@@ -175,9 +175,8 @@ Message received
 # Set container timeout to 10 minutes
 export MERCURY_CONTAINER_TIMEOUT_MS=600000
 
-# Use a preset image from GitHub Container Registry
+# Use the preset image from GitHub Container Registry
 export MERCURY_AGENT_IMAGE=ghcr.io/avishai-tsabari/mercury-agent:latest   # Full (default)
-export MERCURY_AGENT_IMAGE=ghcr.io/avishai-tsabari/mercury-agent:minimal  # Lightweight
 ```
 
 ## Sandboxing (Bubblewrap)
@@ -198,27 +197,24 @@ If you see `bwrap: Creating new namespace failed: Operation not permitted`, try 
 
 Custom images must install `bubblewrap` for sandboxing to work.
 
-## Agent Image Presets
+## Agent Image Preset
 
-Mercury publishes two image presets to GitHub Container Registry:
+Mercury publishes an image preset to GitHub Container Registry:
 
 | Preset | Size | Contents |
 |--------|------|----------|
 | `ghcr.io/avishai-tsabari/mercury-agent:latest` | ~2.8GB | Full devcontainer: Bun, Node.js, Python, Go, git, build tools |
-| `ghcr.io/avishai-tsabari/mercury-agent:minimal` | ~1.9GB | Lightweight runtime: Bun + pi + Chromium deps |
 
-Images are published on each release. Version-specific tags are also available (e.g., `:0.2.0`, `:0.2.0-minimal`).
+Images are published on each release. Version-specific tags are also available (e.g., `:0.2.0`).
 
 ### Building Locally
 
-To build images locally instead of pulling from the registry:
+To build the image locally instead of pulling from the registry:
 ```bash
-./container/build.sh all      # Both presets
-./container/build.sh latest   # Full image only (default)
-./container/build.sh minimal  # Lightweight image only
+./container/build.sh          # Full image (default)
 ```
 
-Then use `mercury-agent:latest` or `mercury-agent:minimal` (without the ghcr.io prefix).
+Then use `mercury-agent:latest` (without the ghcr.io prefix).
 
 ## Custom Agent Images
 

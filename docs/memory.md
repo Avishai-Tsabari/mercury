@@ -107,12 +107,6 @@ _2026-02-25:_ Changed venue to [[Cafe Nimrod]].
 - **Body** — Accumulated context (append semantics, timestamped)
 - **Wikilinks** — Connections to other entities
 
-## Conditional Context
-
-Mercury can skip loading the full session for standalone prompts (e.g. "what's 2+2?"), reducing token usage. After the run, the prompt and reply are merged back into the session so history stays complete.
-
-See [conditional-context.md](conditional-context.md) for details and configuration.
-
 ## Persistence
 
 Memory persists because the agent writes to disk during conversation. When a session compacts or restarts, the vault files remain — the agent reads them fresh on next interaction.

@@ -43,7 +43,7 @@ This provides auto-restart on crash and proper system integration. See [deployme
 
 ## Releasing
 
-Releases are tag-triggered via CI (`.github/workflows/release.yml`). The pipeline runs tests, publishes to npm, creates a GitHub release, and builds+pushes Docker images (amd64+arm64).
+Releases are tag-triggered via CI (`.github/workflows/release.yml`). The pipeline runs tests, publishes to npm (via OIDC trusted publishing), and creates a GitHub release. Container images are built and pushed separately (see `container/build.sh`).
 
 ```bash
 # 1. Bump version in package.json
@@ -63,7 +63,8 @@ gh release create v0.x.y --title "v0.x.y" --notes "## What's Changed
 
 CI publishes:
 - **npm**: `mercury-agent` package
-- **Docker**: `ghcr.io/<owner>/mercury-agent:latest` and `ghcr.io/<owner>/mercury-agent:<version>` (both full and minimal variants)
+
+Container images (`ghcr.io/avishai-tsabari/mercury-agent:latest` and `:<version>`) are built and pushed outside the release workflow.
 
 ## Structure
 
@@ -113,7 +114,6 @@ src/
 │       ├── conversations.ts        # /api/conversations/*
 │       ├── mutes.ts                # /api/mutes/*
 │       ├── control.ts              # /api/whoami, /api/stop, /api/compact
-│       ├── session.ts              # /api/session/context
 │       ├── extensions.ts           # /api/ext/*
 │       └── chat.ts                 # /chat (direct agent bridge)
 │
@@ -151,15 +151,21 @@ docs/                       # Documentation
 container/                  # Dockerfile + build.sh
 resources/
 ├── templates/              # Init templates (AGENTS.md, .env)
-├── prompts/                # KB distillation prompts
+├── profiles/               # Built-in agent profiles (coding, general, research)
 ├── skills/                 # Built-in skills for mrctl commands
-│   ├── tasks/SKILL.md
-│   ├── roles/SKILL.md
-│   ├── permissions/SKILL.md
 │   ├── config/SKILL.md
+│   ├── context/SKILL.md
+│   ├── conversation-recap/SKILL.md
+│   ├── media/SKILL.md
+│   ├── mutes/SKILL.md
+│   ├── permissions/SKILL.md
 │   ├── preferences/SKILL.md
-│   └── spaces/SKILL.md
-└── extensions/             # Pi extensions (subagent)
+│   ├── recall/SKILL.md
+│   ├── roles/SKILL.md
+│   ├── spaces/SKILL.md
+│   └── tasks/SKILL.md
+├── agents/                 # Subagent definitions (explore, worker)
+└── pi-extensions/          # Pi extensions (subagent)
 ```
 
 ## Key Files
@@ -227,7 +233,6 @@ Internal API used by `mrctl` from inside containers:
 | `/api/mutes/:userId` | DELETE | Unmute a user |
 | `/api/stop` | POST | Abort current run |
 | `/api/compact` | POST | Session boundary |
-| `/api/session/context` | GET | Pi session context estimate (compact permission) |
 | `/api/ext` | GET | List installed extensions |
 | `/api/ext/:name/auth` | POST | Permission check for extension CLI |
 | `/api/tradestation/orders` | POST | TradeStation orderconfirm + two-step place (requires `tradestation` permission; SIM-only unless `MERCURY_TS_ALLOW_LIVE_ORDERS`) |

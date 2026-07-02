@@ -52,7 +52,7 @@ defaults:
   trigger_patterns: always
 ```
 
-Apply it with `mercury profile apply <name|path|git-url>`. That validates
+Apply it with `mercury setup --profile <name|path>`. That validates
 capabilities, copies extensions/AGENTS.md, and persists activation to
 `.mercury/active-profile.json`, which Mercury loads at startup.
 
@@ -168,7 +168,7 @@ Depend on this repo (`mercury-agent`) for the types
 
 ## 5. Local test loop
 
-1. `mercury profile apply ./barber`
+1. `mercury setup --profile ./barber`
 2. `mercury service install` (builds the derived image with the extension CLI)
 3. DM the bot as a non-admin number; confirm you can `book`/`cancel` only your
    own appointments and cannot reach `gws`/Gmail.
