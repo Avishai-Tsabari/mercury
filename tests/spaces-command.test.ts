@@ -13,7 +13,7 @@ describe("Spaces command", () => {
 
     runtime = new MercuryCoreRuntime({
       modelProvider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      model: "claude-opus-4-8",
       triggerPatterns: "@Pi,Pi",
       triggerMatch: "mention",
       dataDir: tempDir,

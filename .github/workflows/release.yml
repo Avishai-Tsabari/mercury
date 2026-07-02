@@ -16,10 +16,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install
+      - run: bun install --frozen-lockfile
 
-      - name: Run tests
-        run: bun test
+      - name: Run checks (typecheck + lint + tests + custom gates)
+        run: bun run check
 
   release:
     needs: test

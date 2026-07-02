@@ -40,7 +40,7 @@ describe("loadConfig", () => {
     expect(config.logLevel).toBe("info");
     expect(config.logFormat).toBe("text");
     expect(config.resolvedModelChain).toEqual([
-      { provider: "anthropic", model: "claude-opus-4-6" },
+      { provider: "anthropic", model: "claude-opus-4-8" },
     ]);
     expect(config.modelMaxRetriesPerLeg).toBe(2);
     expect(config.modelChainBudgetMs).toBe(120_000);
@@ -119,13 +119,13 @@ describe("loadConfig", () => {
 
   test("legacy primary + optional fallback builds two-leg chain", () => {
     process.env.MERCURY_MODEL_PROVIDER = "anthropic";
-    process.env.MERCURY_MODEL = "claude-sonnet-4-20250514";
+    process.env.MERCURY_MODEL = "claude-opus-4-8";
     process.env.MERCURY_MODEL_FALLBACK_PROVIDER = "openai";
     process.env.MERCURY_MODEL_FALLBACK = "gpt-4o-mini";
 
     const config = loadConfig();
     expect(config.resolvedModelChain).toEqual([
-      { provider: "anthropic", model: "claude-sonnet-4-20250514" },
+      { provider: "anthropic", model: "claude-opus-4-8" },
       { provider: "openai", model: "gpt-4o-mini" },
     ]);
   });

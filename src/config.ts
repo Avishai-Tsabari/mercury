@@ -62,7 +62,7 @@ const schema = z.object({
 
   // ─── AI Model ───────────────────────────────────────────────────────
   modelProvider: z.string().default("anthropic"),
-  model: z.string().default("claude-opus-4-6"),
+  model: z.string().default("claude-opus-4-8"),
   modelFallbackProvider: z.string().optional(),
   modelFallback: z.string().optional(),
   /** JSON array of `{ provider, model }`. When set, overrides legacy primary+fallback pair. */

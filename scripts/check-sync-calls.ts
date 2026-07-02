@@ -3,16 +3,14 @@
 // `spawnSync` / `execSync` inside a long-running HTTP server freeze the entire
 // Bun/Hono event loop for the duration of the child process — up to 5 minutes
 // on a cold Docker image pull. No other request (health check, agent start,
-// rolling deploy) can be served while one is running. See
-// docs/debug/moderate/2026-05-11-node-agent-capture-sync-blocks-event-loop.md.
+// rolling deploy) can be served while one is running.
 //
 // This gate bans `spawnSync(` / `execSync(` in code that runs inside the server
 // event loop. The original scope was path-based — route handlers only — but a
 // sync `execSync("docker build")` in src/extensions/image-builder.ts (build
 // code, *not* a route file, yet reachable from a request handler via
 // container-runner.ts) slipped through and stalled the event loop for ~4
-// minutes on the first message after every deploy. See
-// docs/debug/moderate/2026-05-14-first-message-after-deploy-blocked-by-sync-ext-rebuild.md.
+// minutes on the first message after every deploy.
 //
 // So the scan now covers all of src/ EXCEPT src/cli/. A full call-graph
 // reachability analyzer is still deferred; this is a wider but still static

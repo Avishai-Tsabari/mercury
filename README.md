@@ -18,7 +18,7 @@ Mercury is a personal AI assistant that lives where you chat. It connects to Wha
 ## Prerequisites
 
 - **[Node.js](https://nodejs.org/)** >= 18 — Required for `npm install -g mercury-agent`
-- **[Bun](https://bun.sh)** >= 1.0 — JavaScript runtime used by Mercury
+- **[Bun](https://bun.sh)** >= 1.2 — JavaScript runtime used by Mercury
 - **[Docker](https://docs.docker.com/get-docker/)** — Required for running agent containers. On Linux, also install `docker-buildx` (`apt-get install docker-buildx`) — Docker Desktop includes it, but Docker Engine on Linux does not.
 - **Windows users:** Mercury runs best under [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install). Install WSL2 with `wsl --install`, then install Bun and Docker inside it.
 
@@ -65,6 +65,8 @@ mercury run
 # or install as a background service:
 mercury service install
 ```
+
+> `mercury run` runs in the foreground (good for a first smoke test). For anything long-running, prefer `mercury service install` — it runs in the background and auto-restarts.
 
 ### Set up spaces and conversations
 
@@ -310,7 +312,7 @@ Optional project file **`mercury.yaml`** (or **`mercury.yml`**) supplies non-sec
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MERCURY_DATA_DIR` | `.mercury` | Data directory |
-| `MERCURY_MAX_CONCURRENCY` | `3` | Max concurrent runs |
+| `MERCURY_MAX_CONCURRENCY` | `2` | Max concurrent runs |
 | `MERCURY_PORT` | `8787` | API port |
 | `MERCURY_BOT_USERNAME` | `mercury` | Bot display name |
 | `MERCURY_LOG_LEVEL` | `info` | Log level |
@@ -335,7 +337,7 @@ Supported OAuth providers: Anthropic, GitHub Copilot, Google Gemini CLI, Antigra
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MERCURY_MODEL_PROVIDER` | `anthropic` | Provider |
-| `MERCURY_MODEL` | `claude-opus-4-6` | Model |
+| `MERCURY_MODEL` | `claude-opus-4-8` | Model |
 | `MERCURY_ANTHROPIC_API_KEY` | — | API key |
 | `MERCURY_ANTHROPIC_OAUTH_TOKEN` | — | OAuth token (alternative) |
 
@@ -357,7 +359,7 @@ Supported OAuth providers: Anthropic, GitHub Copilot, Google Gemini CLI, Antigra
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MERCURY_AGENT_CONTAINER_IMAGE` | `ghcr.io/avishai-tsabari/mercury-agent:latest` | Container image |
+| `MERCURY_AGENT_IMAGE` | `ghcr.io/avishai-tsabari/mercury-agent:latest` | Container image |
 | `MERCURY_CONTAINER_TIMEOUT_MS` | `300000` | Container timeout (5 min) |
 | `MERCURY_CONTAINER_RUNTIME` | `runc` | `runc` (default) or `runsc` ([gVisor](https://gvisor.dev)) |
 | `MERCURY_CONTAINER_BWRAP_DOCKER_COMPAT` | `false` | Set `true` on Linux Docker Engine (see note below) |
@@ -413,7 +415,6 @@ mrctl config set trigger_patterns "@Bot,Bot"
 
 ## Docs
 
-- **Remaining work:** [TODOS](docs/TODOS.md) — Security, reliability, and ops gaps
 - **Platform setup:** [WhatsApp](docs/setup-whatsapp.md) · [Discord](docs/setup-discord.md) · [Slack](docs/setup-slack.md)
 - [Configuration](docs/configuration.md) (mercury.yaml + env) · [PRD: config load](docs/prd-config-load.md)
 - [Authentication](docs/auth/overview.md)

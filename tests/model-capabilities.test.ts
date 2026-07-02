@@ -29,7 +29,7 @@ describe("resolveModelCapabilitiesWithSource", () => {
   test("env wins over builtin", () => {
     const env = parseModelCapabilitiesEnv('{"tools": false, "vision": true}');
     const r = resolveModelCapabilitiesWithSource(
-      "claude-opus-4-6",
+      "claude-opus-4-8",
       "anthropic",
       null,
       env,
@@ -64,12 +64,12 @@ describe("resolveModelCapabilitiesWithSource", () => {
   test("YAML exact match overrides builtin when env unset", () => {
     const map = new Map([
       [
-        "claude-opus-4-6",
+        "claude-opus-4-8",
         { ...DEFAULT_CAPABILITIES, tools: false, vision: false },
       ],
     ]);
     const r = resolveModelCapabilitiesWithSource(
-      "claude-opus-4-6",
+      "claude-opus-4-8",
       "anthropic",
       map,
       null,

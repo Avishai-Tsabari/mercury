@@ -29,8 +29,7 @@ import { ContainerError } from "./container-error.js";
  * launching the inner container detached (`docker create` + `docker start`, no
  * attach) is the only pattern that works through the Bun `fetch()`-based body-proxy
  * the cloud agent lane goes through — the proxy cannot carry Docker's hijacked
- * attach connection, so an attached run hangs to its idleTimeout (see
- * docs/debug/major/2026-05-25-agent-lane-docker-run-wait-hang-no-chat-response.md).
+ * attach connection, so an attached run hangs to its idleTimeout.
  */
 const INNER_IO_DIR = "/run/mercury-io";
 

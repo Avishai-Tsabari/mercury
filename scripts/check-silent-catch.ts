@@ -1,7 +1,7 @@
 // Silent-catch gate.
 //
 // The "silent failure / swallowed error" pattern is the only bug class present
-// in all four post-mortem syntheses (docs/debug/summarization/). This gate
+// in all four internal post-mortem syntheses. This gate
 // blocks the two unambiguous, grep-detectable shapes from spreading further:
 //
 //   1. `.catch(() => {})`        — a promise rejection discarded with zero trace

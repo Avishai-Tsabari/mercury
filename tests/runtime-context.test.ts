@@ -8,7 +8,7 @@ import { MercuryCoreRuntime } from "../src/core/runtime.js";
 function baseRuntimeConfig(tempDir: string): AppConfig {
   return {
     modelProvider: "anthropic",
-    model: "claude-sonnet-4-20250514",
+    model: "claude-opus-4-8",
     triggerPatterns: "@Pi,Pi",
     triggerMatch: "mention",
     // Context defaults — match the Zod defaults in src/config.ts. The
@@ -40,9 +40,7 @@ function baseRuntimeConfig(tempDir: string): AppConfig {
     globalDir: path.join(tempDir, "global"),
     spacesDir: path.join(tempDir, "spaces"),
     whatsappAuthDir: path.join(tempDir, "whatsapp-auth"),
-    resolvedModelChain: [
-      { provider: "anthropic", model: "claude-sonnet-4-20250514" },
-    ],
+    resolvedModelChain: [{ provider: "anthropic", model: "claude-opus-4-8" }],
     resolvedModelChainCapabilities: [
       {
         tools: true,

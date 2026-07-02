@@ -9,10 +9,10 @@
 # model:
 #   chain:
 #     - provider: anthropic
-#       model: claude-sonnet-4-20250514
+#       model: claude-opus-4-8
 #   # Legacy single primary + optional fallback (when chain is omitted):
 #   # provider: anthropic
-#   # model: claude-sonnet-4-20250514
+#   # model: claude-opus-4-8
 #   # fallback_provider: openai
 #   # fallback: gpt-4o-mini
 #   # max_retries_per_leg: 2

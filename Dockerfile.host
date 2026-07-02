@@ -3,7 +3,6 @@
 # Distinct from container/Dockerfile which builds the inner pi coding-agent image.
 # Base pinned by digest: upstream oven/bun:1 drifted its default user between
 # v0.8.2 and v0.8.5, which silently broke uid-1000-owned state.db on redeploy.
-# See docs/debug/major/2026-04-16-host-base-image-user-drift.md.
 FROM oven/bun:1@sha256:8956c7667fa17beb6e3c664115e66bdacfe502da5d99603626e74c197bdef160
 USER root
 

@@ -90,7 +90,7 @@ async function main() {
   // ─── Normalize data dir ownership ───────────────────────────────────────
   // Host base image's default user has drifted historically; if the volume
   // was written by a previous uid, SQLite can't reopen state.db for writes.
-  // Idempotent on matching ownership. See docs/debug/major/2026-04-16-host-base-image-user-drift.md.
+  // Idempotent on matching ownership.
   if (process.platform === "linux" && process.getuid?.() === 0) {
     const dataDirPath = resolveProjectPath(config.dataDir);
     if (existsSync(dataDirPath)) {

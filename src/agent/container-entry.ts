@@ -132,7 +132,7 @@ function parseModelLegsFromEnv(): ModelLeg[] {
   return [
     {
       provider: process.env.MODEL_PROVIDER || "anthropic",
-      model: process.env.MODEL || "claude-opus-4-6",
+      model: process.env.MODEL || "claude-opus-4-8",
     },
   ];
 }

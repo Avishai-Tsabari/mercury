@@ -3,8 +3,8 @@
 // A stale semver floor on a *direct* dependency silently re-introduces a known
 // CVE: `bun install` is free to resolve down to the declared floor, so if the
 // floor itself sits inside a vulnerable range, the lockfile can carry the vuln
-// until someone happens to regenerate it. This is exactly how the hono CVEs
-// landed — see docs/debug/moderate/2026-05-08-node-agent-hono-audit-vulnerabilities.md.
+// until someone happens to regenerate it. This is exactly how the hono audit
+// CVEs landed in a prior incident.
 //
 // This gate cross-references `bun audit --json` against the package's *direct*
 // dependencies. For each advisory whose package is a direct dependency, it

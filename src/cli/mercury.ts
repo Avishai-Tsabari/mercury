@@ -721,7 +721,7 @@ program
       anthropic: {
         envKey: "MERCURY_ANTHROPIC_API_KEY",
         label: "Anthropic API key",
-        defaultModel: "claude-sonnet-4-20250514",
+        defaultModel: "claude-opus-4-8",
       },
       openai: {
         envKey: "MERCURY_OPENAI_API_KEY",
