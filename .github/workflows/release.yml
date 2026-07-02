@@ -55,18 +55,9 @@ jobs:
       # Trusted publishing needs npm >= 11.5.1; ensure a recent CLI.
       - run: npm install -g npm@latest
 
-      - name: Diagnose OIDC preconditions
-        run: |
-          echo "npm path: $(which npm)"
-          echo "npm version: $(npm --version)"
-          echo "node version: $(node --version)"
-          echo "registry: $(npm config get registry)"
-          echo "userconfig: ${NPM_CONFIG_USERCONFIG:-<unset>}"
-          echo "OIDC request url present: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}"
-          echo "OIDC request token present: ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+yes}"
-
       # No NODE_AUTH_TOKEN: identity comes from OIDC via the trusted
-      # publisher configured on npmjs.com. Provenance is attached automatically.
-      # Verbose to surface the OIDC token-exchange handshake on failure.
+      # publisher configured on npmjs.com (package Settings -> Trusted
+      # Publisher: repo Avishai-Tsabari/mercury, workflow release.yml, no
+      # environment). Provenance is attached automatically.
       - name: Publish to npm (trusted publishing)
-        run: npm publish --loglevel verbose
+        run: npm publish
