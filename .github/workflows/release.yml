@@ -32,6 +32,28 @@ jobs:
         with:
           generate_release_notes: true
 
-  # npm publish is intentionally NOT automated here.
-  # Publishing is done manually by a maintainer from a local machine
-  # (npm 2FA requires an interactive OTP). See docs/runbooks/publish-checklist.md.
+  publish-npm:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; ensure a recent CLI.
+      - run: npm install -g npm@latest
+
+      # No NODE_AUTH_TOKEN: identity comes from OIDC via the trusted
+      # publisher configured on npmjs.com. Provenance is attached automatically.
+      - name: Publish to npm (trusted publishing)
+        run: npm publish
