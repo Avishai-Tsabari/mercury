@@ -58,6 +58,7 @@ jobs:
       # No NODE_AUTH_TOKEN: identity comes from OIDC via the trusted
       # publisher configured on npmjs.com (package Settings -> Trusted
       # Publisher: repo Avishai-Tsabari/mercury, workflow release.yml, no
-      # environment). Provenance is attached automatically.
+      # environment). --provenance attaches a signed build attestation
+      # (id-token: write above covers both auth and provenance signing).
       - name: Publish to npm (trusted publishing)
-        run: npm publish
+        run: npm publish --provenance
