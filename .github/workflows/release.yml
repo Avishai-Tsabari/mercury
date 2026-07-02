@@ -32,22 +32,6 @@ jobs:
         with:
           generate_release_notes: true
 
-  publish-npm:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: oven-sh/setup-bun@v2
-
-      - run: bun install
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  # npm publish is intentionally NOT automated here.
+  # Publishing is done manually by a maintainer from a local machine
+  # (npm 2FA requires an interactive OTP). See docs/runbooks/publish-checklist.md.
