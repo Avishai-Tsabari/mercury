@@ -97,6 +97,13 @@ patch('/home/mercury/.bun');
 patch('/app/node_modules');
 EOF
 
+# Fix ownership of all mercury home dir artifacts before switching user.
+# Placed here — after the last step that writes to /home/mercury (the pi patch),
+# but before the volatile /app source COPYs below — so this expensive `chown -R`
+# (it walks the whole Chromium + .bun tree) lands in a stable cached layer.
+# Editing source files no longer invalidates it or forces the huge layer re-export.
+RUN chown -R mercury:mercury /home/mercury
+
 COPY src/agent/container-entry.ts /app/src/agent/container-entry.ts
 COPY src/agent/model-capabilities-core.ts /app/src/agent/model-capabilities-core.ts
 COPY src/agent/pi-failure-class.ts /app/src/agent/pi-failure-class.ts
@@ -118,9 +125,6 @@ RUN while IFS= read -r ext || [ -n "$ext" ]; do \
 
 RUN echo '#!/bin/sh\nbun run /app/src/cli/mrctl.ts "$@"' > /usr/local/bin/mrctl && \
     chmod +x /usr/local/bin/mrctl
-
-# Fix ownership of all mercury home dir artifacts before switching user
-RUN chown -R mercury:mercury /home/mercury
 
 USER mercury
 
