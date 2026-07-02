@@ -45,10 +45,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # No registry-url: setup-node's registry-url writes an .npmrc with a
+      # _authToken line that hijacks auth and blocks OIDC. Trusted publishing
+      # only engages when no token is configured.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs npm >= 11.5.1; ensure a recent CLI.
       - run: npm install -g npm@latest
