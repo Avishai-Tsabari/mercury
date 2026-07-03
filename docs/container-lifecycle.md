@@ -4,7 +4,7 @@ Mercury runs agent code inside Docker containers. This document covers how conta
 
 ## Deployment Topology
 
-Mercury uses a two-layer container model. The layers differ between local and production (Hetzner) deployments.
+Mercury uses a two-layer container model. The layers differ between local and production deployments.
 
 ### Local (`mercury run`)
 
