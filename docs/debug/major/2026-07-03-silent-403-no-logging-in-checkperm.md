@@ -1,6 +1,6 @@
 # Bug: Silent 403 on capability routes — checkPerm logs nothing
 
-**Status**: In-Progress
+**Status**: Fixed
 **Severity**: major
 **Slug**: silent-403-no-logging-in-checkperm
 **Reported**: 2026-07-03
@@ -8,11 +8,29 @@
 
 ---
 
+## Post-Mortem
+
+### Investigation
+Read `src/core/api-types.ts` (lines 44-58) and confirmed `checkPerm()` returns a 403 JSON response with no logging call. Read `src/core/routes/capability.ts` (lines 30-70) and confirmed the only log point is the `catch` block at line 60 — no request-level or permission-denial logging exists.
+
+### Root Cause
+`checkPerm()` is a shared permission guard used by 14 route files. It returns a 403 response directly without any `logger.warn` or similar call. The capability route also lacks request-entry logging, so operators have no trace of incoming requests or why they were denied.
+
+### Fix
+- `src/core/api-types.ts`: imported `logger` and added `logger.warn("Permission denied", { spaceId, role, permission })` inside the `if (!hasPermission(...))` block, before the 403 response.
+- `src/core/routes/capability.ts`: added `logger.info("Capability request", { capability, action, callerId, spaceId })` at the top of the POST handler, before the permission check.
+
+### Lessons
+- Permission guards should always log denials at WARN level — a silent 403 is indistinguishable from "the request never happened" when debugging from host logs.
+- Request-entry logging on broker routes (capabilities, tasks, etc.) is essential for production profiles where the operator cannot inspect container-internal traffic.
+
+---
+
 ## Implementation Checklist
-- [ ] Add `logger.warn` to `checkPerm()` in `src/core/api-types.ts`
-- [ ] Add request-level `logger.info` to capability route in `src/core/routes/capability.ts`
-- [ ] Typecheck passes
-- [ ] Session code review
+- [x] Add `logger.warn` to `checkPerm()` in `src/core/api-types.ts`
+- [x] Add request-level `logger.info` to capability route in `src/core/routes/capability.ts`
+- [x] Typecheck passes
+- [x] Session code review
 
 ---
 

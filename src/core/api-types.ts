@@ -3,6 +3,7 @@ import type { AgentContainerRunner } from "../agent/container-runner.js";
 import type { AppConfig } from "../config.js";
 import type { ConfigRegistry } from "../extensions/config-registry.js";
 import type { ExtensionRegistry } from "../extensions/loader.js";
+import { logger } from "../logger.js";
 import type { Db } from "../storage/db.js";
 import type { TradeStationFetch } from "../tradestation/host-api.js";
 import { hasPermission } from "./permissions.js";
@@ -49,6 +50,7 @@ export const checkPerm = (
   const { db } = c.get("apiCtx");
 
   if (!hasPermission(db, spaceId, role, permission)) {
+    logger.warn("Permission denied", { spaceId, role, permission });
     return c.json(
       { error: `Forbidden: requires '${permission}' permission` },
       403,

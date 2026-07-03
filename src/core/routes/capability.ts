@@ -33,6 +33,13 @@ capability.post("/:name/:action", async (c) => {
   const { callerId, spaceId } = getAuth(c);
   const { db, config, registry } = getApiCtx(c);
 
+  logger.info("Capability request", {
+    capability: name,
+    action,
+    callerId,
+    spaceId,
+  });
+
   // Authorization reuses the permission whose name equals the capability, so a
   // single grant (e.g. "barber" in member_permissions) gates both the CLI and
   // this route.
