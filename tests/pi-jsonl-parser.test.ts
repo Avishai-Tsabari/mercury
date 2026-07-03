@@ -107,7 +107,7 @@ describe("parsePiPrintJsonlOutput", () => {
       },
     };
     const stdout = [
-      '{"type":"session","version":3,"id":"x","timestamp":"2026-03-16T15:14:13.258Z","cwd":"/spaces/tagula"}',
+      '{"type":"session","version":3,"id":"x","timestamp":"2026-03-16T15:14:13.258Z","cwd":"/spaces/my-space"}',
       '{"type":"message_start","message":{"role":"user","content":[]}}',
       JSON.stringify(assistantEnd),
     ].join("\n");

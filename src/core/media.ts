@@ -169,8 +169,11 @@ export async function downloadMediaFromUrl(
 
     // Generate filename: {timestamp}-{original} or {timestamp}-{type}.{ext}
     const ext = mimeToExt(options.mimeType);
-    const filename = options.filename
-      ? `${Date.now()}-${options.filename}`
+    const safeName = options.filename
+      ? path.basename(options.filename).replace(/[^a-zA-Z0-9._-]/g, "_")
+      : undefined;
+    const filename = safeName
+      ? `${Date.now()}-${safeName}`
       : `${Date.now()}-${options.type}.${ext}`;
 
     const filePath = path.join(outputDir, filename);

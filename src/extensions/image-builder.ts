@@ -395,7 +395,7 @@ function runDockerBuild(derivedTag: string, contextDir: string): Promise<void> {
  */
 function imageExists(tag: string): boolean {
   try {
-    execSync(`docker image inspect ${tag}`, {
+    execFileSync("docker", ["image", "inspect", tag], {
       encoding: "utf8",
       timeout: 10_000,
       stdio: ["pipe", "pipe", "pipe"],

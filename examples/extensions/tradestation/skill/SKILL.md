@@ -10,9 +10,9 @@ This skill is for **admin** callers only. Mercury injects `TRADESTATION_ACCESS_T
 
 ## Host setup
 
-1. Register an OAuth app with TradeStation (same model as Tagula: `TS_CLIENT_ID`, `TS_CLIENT_SECRET`, redirect URI, scopes such as `openid profile offline_access MarketData ReadAccount`).
+1. Register an OAuth app with TradeStation (`TS_CLIENT_ID`, `TS_CLIENT_SECRET`, redirect URI, scopes such as `openid profile offline_access MarketData ReadAccount`).
    - **Orders**: add TradeStation scopes required for order placement (see [TradeStation scopes](https://api.tradestation.com/docs/fundamentals/authentication/scopes/)); re-authenticate after changing scopes.
-2. Complete OAuth once (e.g. Tagula `manage-auth` / your dashboard) and put the same credentials in the Mercury host `.env` as either the `MERCURY_*` names **or** the same Tagula names (`TS_CLIENT_ID`, `TS_CLIENT_SECRET`, `TS_REFRESH_TOKEN`, optional `TS_ACCESS_TOKEN`). The refresh job accepts both.
+2. Complete OAuth once (via your dashboard) and put the credentials in the Mercury host `.env` as either the `MERCURY_*` names **or** the legacy `TS_*` names (`TS_CLIENT_ID`, `TS_CLIENT_SECRET`, `TS_REFRESH_TOKEN`, optional `TS_ACCESS_TOKEN`). The refresh job accepts both.
    - Optional: `MERCURY_TS_TOKEN_URL`, `MERCURY_TS_API_BASE`, `MERCURY_TS_ENVIRONMENT` (`SIM` / `LIVE` — documented for parity; v3 base URL is unchanged)
    - **Live orders**: by default, only **SIM** accounts (AccountID matching `SIM…`) may place orders via Mercury. To allow non-SIM accounts, set `MERCURY_TS_ALLOW_LIVE_ORDERS=true` on the host (real-money risk).
 3. Restart Mercury so the extension job runs (refresh every **10 minutes**).

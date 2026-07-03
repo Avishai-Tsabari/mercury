@@ -201,8 +201,11 @@ export async function downloadWhatsAppMedia(
 
     // Generate filename: {timestamp}-{type}.{ext}
     const ext = mimeToExt(mediaInfo.mimeType);
-    const filename = mediaInfo.filename
-      ? `${Date.now()}-${mediaInfo.filename}`
+    const safeName = mediaInfo.filename
+      ? path.basename(mediaInfo.filename).replace(/[^a-zA-Z0-9._-]/g, "_")
+      : undefined;
+    const filename = safeName
+      ? `${Date.now()}-${safeName}`
       : `${Date.now()}-${mediaInfo.type}.${ext}`;
 
     const filePath = path.join(mediaDir, filename);

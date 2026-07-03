@@ -1,3 +1,31 @@
 # Runtime-generated symlink — created by ensurePackageLink() on first startup.
 # Excluding it prevents a Windows dev machine's C:\ path from being baked into the image.
 resources/extensions/node_modules/
+
+# Secrets and env files
+.env
+.env.*
+
+# Dev / build artifacts
+.git
+node_modules
+dist
+tests/
+docs/
+examples/
+*.csv
+
+# IDE / tool state
+.claude/
+.pi/
+.mercury/
+.DS_Store
+.nano-pi
+.nanny
+.clawsome/
+
+# Misc
+NEXT-STEPS.md
+*.log
+coverage/
+*.tsbuildinfo

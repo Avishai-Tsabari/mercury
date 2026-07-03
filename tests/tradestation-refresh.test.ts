@@ -56,8 +56,8 @@ describe("runTradeStationTokenRefresh", () => {
     delete process.env.MERCURY_TS_CLIENT_ID;
   });
 
-  it("uses Tagula-style TS_* env when MERCURY_* unset", async () => {
-    process.env.TS_REFRESH_TOKEN = "rt-tagula";
+  it("uses legacy TS_* env when MERCURY_* unset", async () => {
+    process.env.TS_REFRESH_TOKEN = "rt-legacy";
     process.env.TS_CLIENT_ID = "cid";
 
     const mockFetch = async () =>

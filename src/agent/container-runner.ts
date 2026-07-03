@@ -513,7 +513,7 @@ export class AgentContainerRunner {
   async ensureImage(): Promise<void> {
     const image = this.image;
     try {
-      execSync(`docker image inspect ${image}`, {
+      execFileSync("docker", ["image", "inspect", image], {
         stdio: "ignore",
         timeout: 10_000,
       });
@@ -521,7 +521,7 @@ export class AgentContainerRunner {
     } catch {
       logger.info("Agent image not found locally, pulling...", { image });
       try {
-        execSync(`docker pull ${image}`, {
+        execFileSync("docker", ["pull", image], {
           stdio: "inherit",
           timeout: 300_000,
         });
@@ -547,14 +547,15 @@ export class AgentContainerRunner {
   async cleanupOrphans(): Promise<number> {
     try {
       const agentId = process.env.MERCURY_AGENT_ID;
-      const filter = agentId
-        ? `--filter "label=${CONTAINER_LABEL}" --filter "label=${AGENT_ID_LABEL_KEY}=${agentId}"`
-        : `--filter "label=${CONTAINER_LABEL}"`;
+      const filterArgs = [
+        "--filter", `label=${CONTAINER_LABEL}`,
+        ...(agentId ? ["--filter", `label=${AGENT_ID_LABEL_KEY}=${agentId}`] : []),
+      ];
       // Find containers with our labels (running or stopped)
-      const result = execSync(`docker ps -a ${filter} --format "{{.ID}}"`, {
-        encoding: "utf8",
-        timeout: 10_000,
-      }).trim();
+      const result = execFileSync(
+        "docker", ["ps", "-a", ...filterArgs, "--format", "{{.ID}}"],
+        { encoding: "utf8", timeout: 10_000 },
+      ).trim();
 
       if (!result) return 0;
 
@@ -566,7 +567,7 @@ export class AgentContainerRunner {
       });
 
       // Force remove all orphaned containers
-      execSync(`docker rm -f ${containerIds.join(" ")}`, {
+      execFileSync("docker", ["rm", "-f", ...containerIds], {
         encoding: "utf8",
         timeout: 30_000,
       });
@@ -599,7 +600,7 @@ export class AgentContainerRunner {
     for (const [spaceId, { containerName }] of this.runningBySpace) {
       this.abortedSpaces.add(spaceId);
       try {
-        execSync(`docker kill ${containerName}`, { timeout: 5000 });
+        execFileSync("docker", ["kill", containerName], { timeout: 5000 });
       } catch {
         // docker kill can fail (container already exited/reaped) — the poll loop
         // observes abortedSpaces and unwinds either way.
@@ -624,7 +625,7 @@ export class AgentContainerRunner {
     // Use docker kill for reliable container termination; the poll loop observes
     // abortedSpaces and rejects the in-flight reply().
     try {
-      execSync(`docker kill ${entry.containerName}`, { timeout: 5000 });
+      execFileSync("docker", ["kill", entry.containerName], { timeout: 5000 });
     } catch {
       // docker kill can fail (container already exited/reaped) — abortedSpaces
       // still unwinds the poll loop.

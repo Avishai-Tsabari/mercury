@@ -445,6 +445,10 @@ This fork is maintained by [Avishai Tsabari](https://github.com/Avishai-Tsabari)
 
 MIT — see [LICENSE](LICENSE)
 
+### Third-party licenses
+
+The WhatsApp adapter depends on [@whiskeysockets/baileys](https://github.com/WhiskeySockets/Baileys), which transitively includes [libsignal](https://github.com/nicktrav/libsignal) (GPL-3.0) for Signal Protocol encryption. This component runs inside an isolated Docker container and is loaded as a runtime dependency, not statically linked into Mercury's codebase. If your use case has strict copyleft concerns, consult legal counsel or omit the WhatsApp adapter.
+
 ---
 
 <p align="center">

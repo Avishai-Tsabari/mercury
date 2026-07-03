@@ -380,7 +380,7 @@ async function main() {
   const chatShim = createChatShim(onMessage);
 
   // ─── Message Sender (for scheduled tasks) ───────────────────────────────
-  // Tasks use spaceId (e.g. "tagula") which must be resolved to platform
+  // Tasks use spaceId (e.g. "my-space") which must be resolved to platform
   // thread IDs (e.g. "telegram:12345") via linked conversations.
 
   const messageSender: import("./types.js").MessageSender = {
@@ -391,7 +391,7 @@ async function main() {
         // Already a platform thread ID (e.g. "telegram:12345")
         threadIds.push(spaceOrThreadId);
       } else {
-        // Space ID (e.g. "tagula") — resolve to linked conversations
+        // Space ID (e.g. "my-space") — resolve to linked conversations
         const conversations = core.db.getSpaceConversations(spaceOrThreadId);
         for (const conv of conversations) {
           threadIds.push(`${conv.platform}:${conv.externalId}`);

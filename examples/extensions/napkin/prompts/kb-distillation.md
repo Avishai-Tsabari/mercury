@@ -45,20 +45,20 @@ Every entity file follows this shape. The **current** value of a fact lives in B
 
 ```markdown
 ---
-name: Ronny Cohen
+name: Alex Carter
 type: person
 updated: 2026-05-10
-summary: Biotech investor in the tagula group; bullish on SLS.
+summary: Biotech investor in the research group; bullish on ACME.
 # Structured "current value" fields for facts that are known to change:
-sls_price_target: "$15"
+acme_price_target: "$15"
 ---
 
-# Ronny Cohen
+# Alex Carter
 
-Member of the [[tagula-space]] investing group.
+Member of the [[research-space]] investing group.
 
 ## Current View
-- SLS price target: **$15** (as of 2026-05-10)
+- ACME price target: **$15** (as of 2026-05-10)
 - Thesis: bullish, waiting for the Phase 3 readout
 
 ## History

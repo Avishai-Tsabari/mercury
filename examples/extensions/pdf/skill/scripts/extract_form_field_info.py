@@ -1,122 +1,167 @@
+#!/usr/bin/env python3
+"""Extract detailed form field metadata from a PDF and output as JSON.
+
+Usage:
+    python3 extract_form_field_info.py input.pdf
+    python3 extract_form_field_info.py input.pdf -o fields.json
+"""
+
+import argparse
 import json
 import sys
 
 from pypdf import PdfReader
+from pypdf.generic import ArrayObject
 
 
+def resolve_value(value):
+    """Resolve a PDF object to a JSON-serializable value."""
+    if value is None:
+        return None
+    if hasattr(value, "get_object"):
+        value = value.get_object()
+    if isinstance(value, (list, ArrayObject)):
+        return [resolve_value(v) for v in value]
+    return str(value)
 
 
-def get_full_annotation_field_id(annotation):
-    components = []
-    while annotation:
-        field_name = annotation.get('/T')
-        if field_name:
-            components.append(field_name)
-        annotation = annotation.get('/Parent')
-    return ".".join(reversed(components)) if components else None
+def extract_field_rect(field) -> list | None:
+    """Extract the bounding box rectangle for a field widget."""
+    # Try direct /Rect
+    rect = field.get("/Rect")
+    if rect is not None:
+        try:
+            return [float(x) for x in rect]
+        except (TypeError, ValueError):
+            pass
+
+    # Try from /Kids (some forms use indirect widgets)
+    kids = field.get("/Kids")
+    if kids:
+        for kid in kids:
+            kid_obj = kid.get_object() if hasattr(kid, "get_object") else kid
+            rect = kid_obj.get("/Rect")
+            if rect is not None:
+                try:
+                    return [float(x) for x in rect]
+                except (TypeError, ValueError):
+                    pass
+
+    return None
 
 
-def make_field_dict(field, field_id):
-    field_dict = {"field_id": field_id}
-    ft = field.get('/FT')
-    if ft == "/Tx":
-        field_dict["type"] = "text"
-    elif ft == "/Btn":
-        field_dict["type"] = "checkbox"  
-        states = field.get("/_States_", [])
-        if len(states) == 2:
-            if "/Off" in states:
-                field_dict["checked_value"] = states[0] if states[0] != "/Off" else states[1]
-                field_dict["unchecked_value"] = "/Off"
-            else:
-                print(f"Unexpected state values for checkbox `${field_id}`. Its checked and unchecked values may not be correct; if you're trying to check it, visually verify the results.")
-                field_dict["checked_value"] = states[0]
-                field_dict["unchecked_value"] = states[1]
-    elif ft == "/Ch":
-        field_dict["type"] = "choice"
-        states = field.get("/_States_", [])
-        field_dict["choice_options"] = [{
-            "value": state[0],
-            "text": state[1],
-        } for state in states]
-    else:
-        field_dict["type"] = f"unknown ({ft})"
-    return field_dict
+def find_field_page(reader: PdfReader, field) -> int | None:
+    """Determine which page a field belongs to."""
+    # Check /P reference
+    page_ref = field.get("/P")
+    if page_ref is not None:
+        page_obj = page_ref.get_object() if hasattr(page_ref, "get_object") else page_ref
+        for i, page in enumerate(reader.pages):
+            if page.get_object() == page_obj:
+                return i
+
+    # Fall back: search annotations on each page
+    field_obj = field.get_object() if hasattr(field, "get_object") else field
+
+    for i, page in enumerate(reader.pages):
+        annots = page.get("/Annots")
+        if annots is None:
+            continue
+        for annot in annots:
+            annot_obj = annot.get_object() if hasattr(annot, "get_object") else annot
+            if annot_obj == field_obj:
+                return i
+
+    return None
 
 
-def get_field_info(reader: PdfReader):
+def extract_options(field) -> list | None:
+    """Extract options for choice fields."""
+    opts = field.get("/Opt")
+    if opts is None:
+        return None
+    result = []
+    for opt in opts:
+        if hasattr(opt, "get_object"):
+            opt = opt.get_object()
+        if isinstance(opt, (list, ArrayObject)):
+            # [export_value, display_value]
+            result.append({
+                "export": str(opt[0]) if len(opt) > 0 else "",
+                "display": str(opt[1]) if len(opt) > 1 else str(opt[0]) if len(opt) > 0 else "",
+            })
+        else:
+            result.append({"export": str(opt), "display": str(opt)})
+    return result
+
+
+def extract_fields(pdf_path: str) -> list[dict]:
+    """Extract all form field metadata from a PDF."""
+    reader = PdfReader(pdf_path)
     fields = reader.get_fields()
 
-    field_info_by_id = {}
-    possible_radio_names = set()
+    if not fields:
+        return []
 
-    for field_id, field in fields.items():
-        if field.get("/Kids"):
-            if field.get("/FT") == "/Btn":
-                possible_radio_names.add(field_id)
-            continue
-        field_info_by_id[field_id] = make_field_dict(field, field_id)
+    result = []
+    for name, field in fields.items():
+        field_type = str(field.get("/FT", ""))
+        flags = field.get("/Ff")
+        flags_int = int(flags) if flags is not None else 0
 
+        info = {
+            "name": name,
+            "type": field_type,
+            "value": resolve_value(field.get("/V")),
+            "default_value": resolve_value(field.get("/DV")),
+            "rect": extract_field_rect(field),
+            "page": find_field_page(reader, field),
+            "flags": flags_int,
+            "read_only": bool(flags_int & 1),
+            "required": bool(flags_int & 2),
+            "max_length": field.get("/MaxLen"),
+            "options": extract_options(field) if field_type == "/Ch" else None,
+            "tooltip": resolve_value(field.get("/TU")),
+        }
 
-    radio_fields_by_id = {}
+        # For max_length, convert to int if present
+        if info["max_length"] is not None:
+            try:
+                info["max_length"] = int(info["max_length"])
+            except (TypeError, ValueError):
+                info["max_length"] = None
 
-    for page_index, page in enumerate(reader.pages):
-        annotations = page.get('/Annots', [])
-        for ann in annotations:
-            field_id = get_full_annotation_field_id(ann)
-            if field_id in field_info_by_id:
-                field_info_by_id[field_id]["page"] = page_index + 1
-                field_info_by_id[field_id]["rect"] = ann.get('/Rect')
-            elif field_id in possible_radio_names:
-                try:
-                    on_values = [v for v in ann["/AP"]["/N"] if v != "/Off"]
-                except KeyError:
-                    continue
-                if len(on_values) == 1:
-                    rect = ann.get("/Rect")
-                    if field_id not in radio_fields_by_id:
-                        radio_fields_by_id[field_id] = {
-                            "field_id": field_id,
-                            "type": "radio_group",
-                            "page": page_index + 1,
-                            "radio_options": [],
-                        }
-                    radio_fields_by_id[field_id]["radio_options"].append({
-                        "value": on_values[0],
-                        "rect": rect,
-                    })
+        result.append(info)
 
-    fields_with_location = []
-    for field_info in field_info_by_id.values():
-        if "page" in field_info:
-            fields_with_location.append(field_info)
-        else:
-            print(f"Unable to determine location for field id: {field_info.get('field_id')}, ignoring")
-
-    def sort_key(f):
-        if "radio_options" in f:
-            rect = f["radio_options"][0]["rect"] or [0, 0, 0, 0]
-        else:
-            rect = f.get("rect") or [0, 0, 0, 0]
-        adjusted_position = [-rect[1], rect[0]]
-        return [f.get("page"), adjusted_position]
-    
-    sorted_fields = fields_with_location + list(radio_fields_by_id.values())
-    sorted_fields.sort(key=sort_key)
-
-    return sorted_fields
+    return result
 
 
-def write_field_info(pdf_path: str, json_output_path: str):
-    reader = PdfReader(pdf_path)
-    field_info = get_field_info(reader)
-    with open(json_output_path, "w") as f:
-        json.dump(field_info, f, indent=2)
-    print(f"Wrote {len(field_info)} fields to {json_output_path}")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Extract form field metadata from a PDF"
+    )
+    parser.add_argument("pdf", help="Path to the PDF file")
+    parser.add_argument(
+        "-o", "--output",
+        help="Output JSON file path (default: stdout)"
+    )
+    args = parser.parse_args()
+
+    try:
+        fields = extract_fields(args.pdf)
+    except Exception as e:
+        print(f"Error reading PDF: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    output = json.dumps(fields, indent=2, ensure_ascii=False)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(output)
+        print(f"Wrote {len(fields)} field(s) to {args.output}")
+    else:
+        print(output)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: extract_form_field_info.py [input pdf] [output json]")
-        sys.exit(1)
-    write_field_info(sys.argv[1], sys.argv[2])
+    main()

@@ -250,8 +250,11 @@ export class TelegramBridge implements PlatformBridge {
               }
               fs.mkdirSync(inboxDir, { recursive: true });
               const ext = mimeToExt(mimeType);
-              const filename = att.name
-                ? `${Date.now()}-${att.name}`
+              const safeName = att.name
+                ? path.basename(att.name).replace(/[^a-zA-Z0-9._-]/g, "_")
+                : undefined;
+              const filename = safeName
+                ? `${Date.now()}-${safeName}`
                 : `${Date.now()}-${type}.${ext}`;
               const filePath = path.join(inboxDir, filename);
               fs.writeFileSync(filePath, buffer);

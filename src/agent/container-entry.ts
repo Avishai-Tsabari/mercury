@@ -334,7 +334,7 @@ function buildSystemPrompt(
   }
 
   // Override mode: Mercury owns the full system prompt — no pi identity references.
-  // Tool snippets are exact strings from badlogic/pi-mono packages/coding-agent/src/core/system-prompt.ts
+  // Tool snippets are exact strings from badlogic/pi's coding-agent system-prompt.ts
   const toolsList = caps.tools
     ? [
         "- read: Read the contents of a file or URL. Supports text files and images (jpg, png, gif, webp). Also converts binary formats (PDF, DOCX, PPTX, XLSX, EPUB, Jupyter, CSV, audio, ZIP, RSS/Atom feeds) and URLs (GitHub repos, gists, issues, PRs, and any web page) to markdown.",
