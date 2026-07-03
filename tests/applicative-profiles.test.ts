@@ -36,29 +36,29 @@ afterEach(() => {
 
 describe("applicative profile schema", () => {
   test("parses capabilities, member_permissions, and multiline system_prompt", () => {
-    const dir = writeProfile(`name: barber-appointments
-description: Appointment booking for a barber shop
+    const dir = writeProfile(`name: room-booking
+description: Meeting room booking assistant
 version: 0.1.0
 capabilities:
   - gws
 member_permissions:
   - prompt
   - prefs.get
-  - barber
+  - rooms
 system_prompt: |
-  You are a barber shop assistant.
-  Help each customer with only their own appointments.
+  You are a meeting room booking assistant.
+  Help each user with only their own reservations.
 `);
     const profile = loadProfileFromDir(dir);
-    expect(profile.name).toBe("barber-appointments");
+    expect(profile.name).toBe("room-booking");
     expect(profile.capabilities).toEqual(["gws"]);
     expect(profile.member_permissions).toEqual([
       "prompt",
       "prefs.get",
-      "barber",
+      "rooms",
     ]);
-    expect(profile.system_prompt).toContain("barber shop assistant");
-    expect(profile.system_prompt).toContain("only their own appointments");
+    expect(profile.system_prompt).toContain("room booking assistant");
+    expect(profile.system_prompt).toContain("only their own reservations");
   });
 
   test("defaults capabilities to [] and leaves optional fields undefined", () => {

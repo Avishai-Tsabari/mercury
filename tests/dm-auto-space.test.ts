@@ -60,7 +60,7 @@ describe("dm-auto-space", () => {
     expect(result).toBeNull();
   });
 
-  test("enabled: creates space and links for new customer DM", () => {
+  test("enabled: creates space and links for new user DM", () => {
     const result = resolveConversation(
       db,
       "whatsapp",
@@ -150,7 +150,7 @@ describe("dm-auto-space", () => {
     expect(result?.spaceId).toBe("main");
   });
 
-  test("returning customer: reuses existing space", () => {
+  test("returning user: reuses existing space", () => {
     const first = resolveConversation(
       db,
       "whatsapp",

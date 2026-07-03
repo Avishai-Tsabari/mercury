@@ -80,8 +80,8 @@
 #   enabled: false
 #   admin_ids:                              # auto-link to "main" space
 #     - "972501234567"
-#   default_system_prompt: ""                   # seeded into auto-created customer spaces
-#   default_member_permissions: "prompt,prefs.get"  # restrict customers to chat only
+#   default_system_prompt: ""                   # seeded into auto-created user spaces
+#   default_member_permissions: "prompt,prefs.get"  # restrict users to chat only
 
 # ─── Applicative profile ────────────────────────────────────────────────────
 # A profile wraps raw capabilities with deterministic business logic and scopes
