@@ -8,8 +8,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const KNOWLEDGE_DIR = "knowledge";
 const VAULT_DIRS = ["people", "projects", "references", "daily", "episodes", "weekly", "monthly", "templates"];
@@ -135,25 +136,31 @@ function exportMessages(
 }
 
 /**
- * Build a child env whose PATH also contains the standard global-bin
- * directories where the `pi` CLI is installed. The distill job runs in the
- * Mercury HOST process, which — unlike the cloud Docker image, where `pi` is
- * always on PATH — may have been launched with an incomplete PATH (e.g.
- * `bun <abs>/mercury.ts run` from an IDE or a scheduled task resolves
- * `.bun/bin` but not the npm global bin). A bare `spawn("pi")` then fails with
- * ENOENT before pi ever starts. Appending the well-known global-bin dirs makes
- * resolution robust on local installs and is a no-op in the cloud.
+ * Build a child env whose PATH also contains directories where the `pi` CLI
+ * may live. A global npm install only links the top-level package's bins
+ * (mercury, mercury-ctl) — dependency bins like `pi` stay in node_modules/.bin.
+ * We resolve that .bin dir from the package graph first, then fall back to
+ * well-known global-bin dirs (~/.bun/bin, /usr/local/bin).
  */
 function envWithPiOnPath(): NodeJS.ProcessEnv {
   const isWindows = process.platform === "win32";
   const base = process.env.PATH ?? process.env.Path ?? "";
   const home = homedir();
+
+  let piNodeModulesBin: string | undefined;
+  try {
+    const req = createRequire(import.meta.url);
+    const pkgJson = req.resolve("@earendil-works/pi-coding-agent/package.json");
+    piNodeModulesBin = join(dirname(dirname(dirname(pkgJson))), ".bin");
+  } catch {}
+
   const candidates = [
+    piNodeModulesBin,
     join(home, ".bun", "bin"),
     isWindows
       ? join(process.env.APPDATA ?? join(home, "AppData", "Roaming"), "npm")
       : "/usr/local/bin",
-  ];
+  ].filter(Boolean) as string[];
   // PATH entries are case-insensitive on Windows, case-sensitive on POSIX.
   const normalize = (p: string) => (isWindows ? p.toLowerCase() : p);
   const existing = new Set(base.split(delimiter).map(normalize).filter(Boolean));
