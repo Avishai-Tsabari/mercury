@@ -11,6 +11,7 @@ import {
   resetPermissions,
   resolveRole,
   seededSpaces,
+  setActiveProfileMemberPermissions,
 } from "../src/core/permissions.js";
 import { Db } from "../src/storage/db.js";
 
@@ -227,6 +228,54 @@ describe("dynamic permissions", () => {
     const perms = getRolePermissions(db, "g1", "member");
     expect(perms.has("napkin")).toBe(false);
     expect(getAllPermissions()).not.toContain("napkin");
+  });
+});
+
+describe("active profile vs seeded permissions", () => {
+  test("dm-auto-space seeded permissions yield to active profile", () => {
+    registerPermission("barber", { defaultRoles: [] });
+    db.setSpaceConfig(
+      "g1",
+      "role.member.permissions",
+      "prompt,prefs.get",
+      "dm-auto-space",
+    );
+    setActiveProfileMemberPermissions(["prompt", "prefs.get", "barber"]);
+
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("prompt")).toBe(true);
+    expect(perms.has("prefs.get")).toBe(true);
+    expect(perms.has("barber")).toBe(true);
+  });
+
+  test("admin-set permissions still override active profile", () => {
+    registerPermission("barber", { defaultRoles: [] });
+    db.setSpaceConfig(
+      "g1",
+      "role.member.permissions",
+      "prompt",
+      "admin-user-123",
+    );
+    setActiveProfileMemberPermissions(["prompt", "prefs.get", "barber"]);
+
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("prompt")).toBe(true);
+    expect(perms.has("barber")).toBe(false);
+    expect(perms.has("prefs.get")).toBe(false);
+  });
+
+  test("seeded permissions used when no profile is active", () => {
+    db.setSpaceConfig(
+      "g1",
+      "role.member.permissions",
+      "prompt,prefs.get",
+      "dm-auto-space",
+    );
+
+    const perms = getRolePermissions(db, "g1", "member");
+    expect(perms.has("prompt")).toBe(true);
+    expect(perms.has("prefs.get")).toBe(true);
+    expect(perms.size).toBe(2);
   });
 });
 

@@ -1276,6 +1276,15 @@ export class Db {
     return row?.value ?? null;
   }
 
+  getSpaceConfigUpdatedBy(spaceId: string, key: string): string | null {
+    const row = this.db
+      .query(
+        "SELECT updated_by FROM space_config WHERE space_id = ? AND key = ?",
+      )
+      .get(spaceId, key) as { updated_by: string } | null;
+    return row?.updated_by ?? null;
+  }
+
   setSpaceConfig(
     spaceId: string,
     key: string,

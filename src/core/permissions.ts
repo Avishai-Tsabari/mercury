@@ -89,8 +89,9 @@ export function resetPermissions(): void {
  * Project-wide (one profile per deployment): set once at startup from the
  * persisted profile activation. When non-null it is the EXHAUSTIVE member
  * permission set — no extension defaults are merged — so raw capabilities stay
- * admin-only unless the profile lists them. A per-space
- * `role.member.permissions` override still takes precedence over this.
+ * admin-only unless the profile lists them. An explicit per-space
+ * `role.member.permissions` override (set by an admin, dashboard, or console)
+ * still takes precedence, but dm-auto-space seeded defaults do not.
  */
 let activeProfileMemberPermissions: string[] | null = null;
 
@@ -182,15 +183,21 @@ export function getRolePermissions(
   const key = `role.${role}.permissions`;
   const stored = db.getSpaceConfig(spaceId, key);
 
-  // Explicit per-space override wins over everything.
   if (stored !== null) {
-    return toPermissionSet(stored.split(","));
+    // dm-auto-space seeded defaults yield to the active profile — they are
+    // deployment defaults, not intentional admin overrides. Any other source
+    // (admin, dashboard, console) is an explicit override and wins.
+    const isSeededDefault =
+      role === "member" &&
+      Array.isArray(activeProfileMemberPermissions) &&
+      db.getSpaceConfigUpdatedBy(spaceId, key) === "dm-auto-space";
+
+    if (!isSeededDefault) {
+      return toPermissionSet(stored.split(","));
+    }
+    // Fall through to profile check below.
   }
 
-  // An active profile sets the exhaustive member permission set (project-wide),
-  // ahead of built-in/extension defaults. Members only; profiles never widen
-  // admin/system. Guard with Array.isArray so a malformed persisted activation
-  // (missing/non-array value) falls back to defaults instead of throwing here.
   if (role === "member" && Array.isArray(activeProfileMemberPermissions)) {
     return toPermissionSet(activeProfileMemberPermissions);
   }
