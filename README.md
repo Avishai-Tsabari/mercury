@@ -155,7 +155,7 @@ Each space is a user-defined memory boundary with its own workspace and pi sessi
 | **Media** | Images, documents, voice notes | [docs/media/overview.md](docs/media/overview.md) |
 | **KB Distillation** | Extract lasting knowledge from chats | [docs/kb-distillation.md](docs/kb-distillation.md) |
 | **Extensions** | TypeScript plugins for CLIs, skills, jobs, hooks | [docs/extensions.md](docs/extensions.md) |
-| **DM Auto-Space** | Auto-create isolated spaces per customer DM | [docs/rate-limiting.md](docs/rate-limiting.md) |
+| **DM Auto-Space** | Auto-create isolated spaces per user DM | [docs/rate-limiting.md](docs/rate-limiting.md) |
 
 ---
 
@@ -404,7 +404,7 @@ Supported OAuth providers: Anthropic, GitHub Copilot, Google Gemini CLI, Antigra
 
 ### DM Auto-Space
 
-Auto-create isolated spaces for each customer who DMs your bot. Each customer gets their own space with persistent context, configurable permissions, and rate limits.
+Auto-create isolated spaces for each user who DMs your bot. Each user gets their own space with persistent context, configurable permissions, and rate limits.
 
 ```yaml
 # mercury.yaml
@@ -413,7 +413,7 @@ dm_auto_space:
   admin_ids:                                    # platform IDs — auto-link to "main" space
     - "24417056866472"                          # WhatsApp LID, Telegram user ID, etc.
   default_system_prompt: "You are a helpful assistant."
-  default_member_permissions: "prompt,prefs.get"  # restrict customers to chat only
+  default_member_permissions: "prompt,prefs.get"  # restrict users to chat only
 
 runtime:
   rate_limit_daily_member: 20                   # global daily cap for members (0 = unlimited)
