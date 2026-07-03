@@ -2207,6 +2207,33 @@ profilesCommand
     console.log(`\nUse with: mercury setup --profile ${absOutput}`);
   });
 
+profilesCommand
+  .command("apply <source>")
+  .description("Apply an external profile (non-interactive)")
+  .action(async (source: string) => {
+    const { resolveProfileSource, loadProfileFromDir, applyProfile } =
+      await import("../core/profiles.js");
+
+    let cleanup = () => {};
+    try {
+      const resolved = resolveProfileSource(source, PROFILES_DIR);
+      cleanup = resolved.cleanup;
+      const profile = loadProfileFromDir(resolved.dir);
+      applyProfile(profile, resolved.dir, CWD);
+      console.log(`Profile "${profile.name}" applied.`);
+      console.log(
+        "Run 'mercury service install' to rebuild the container image.",
+      );
+    } catch (err) {
+      console.error(
+        `Failed to apply profile: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    } finally {
+      cleanup();
+    }
+  });
+
 const spacesCommand = program.command("spaces").description("Manage spaces");
 
 spacesCommand

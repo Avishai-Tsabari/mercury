@@ -1,6 +1,6 @@
 # Bug: No non-interactive `mercury profiles apply` command
 
-**Status**: In-Progress
+**Status**: Fixed
 **Severity**: major
 **Slug**: no-profiles-apply-cli-command
 **Reported**: 2026-07-03
@@ -8,10 +8,27 @@
 
 ---
 
+## Post-Mortem
+
+### Investigation
+Read `src/cli/mercury.ts` to find the profiles CLI — the bug report referenced `src/cli/profiles.ts` which doesn't exist. Found the `profilesCommand` block at line 2055 with `list`, `show`, and `export` subcommands but no `apply`. Also read `src/core/profiles.ts` to confirm `applyProfile()` and `resolveProfileSource()` exist and handle all source types (built-in, local path, git URL). Compared the `setup --profile` path (lines 844-858, older cosmetic copy) with `applyProfile()` (lines 135-173, full applicative activation including `active-profile.json` and capability validation) — confirmed `applyProfile` is the correct function to expose.
+
+### Root Cause
+The `profilesCommand` in `src/cli/mercury.ts` had `list`, `show`, and `export` subcommands but no `apply`. The only way to activate a profile was through the interactive `mercury setup --profile` wizard, which prompts for AI provider, model, API key, and platform — making it unusable in automated/headless environments.
+
+### Fix
+Added `profiles apply <source>` subcommand to `src/cli/mercury.ts` (after the `export` subcommand). Uses `resolveProfileSource()` to handle built-in names, local paths, and git URLs, then calls `loadProfileFromDir()` and `applyProfile()`. Error handling catches resolution/validation failures with a clean message, and `finally` ensures git-cloned temp dirs are cleaned up.
+
+### Lessons
+- New core functions (`applyProfile`) should ship with a CLI entry point from the start — the function existed but was only reachable through an interactive wizard, leaving automated consumers to reverse-engineer the internals.
+- The bug report referenced a file (`src/cli/profiles.ts`) that doesn't exist — always verify suspected locations before starting the fix.
+
+---
+
 ## Implementation Checklist
-- [ ] Add `apply <source>` subcommand to `src/cli/profiles.ts`
-- [ ] Typecheck passes
-- [ ] Session code review
+- [x] Add `apply <source>` subcommand to `src/cli/mercury.ts`
+- [x] Typecheck passes
+- [x] Session code review
 
 ---
 
