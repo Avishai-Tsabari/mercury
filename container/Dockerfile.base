@@ -42,7 +42,7 @@ RUN echo '{"args":["--no-sandbox"]}' > /home/mercury/.puppeteerrc.json
 ENV CHROMIUM_FLAGS="--no-sandbox"
 
 # Install CLIs
-RUN bun add -g @mariozechner/pi-coding-agent@^0.67.2
+RUN bun add -g @earendil-works/pi-coding-agent@~0.79.6
 
 WORKDIR /app
 
@@ -59,7 +59,7 @@ function patch(dir) {
       const p = path.join(dir, f);
       try {
         if (fs.statSync(p).isDirectory()) patch(p);
-        else if (f === 'google.js' && p.includes('@mariozechner/pi-ai')) {
+        else if (f === 'google.js' && p.includes('@earendil-works/pi-ai')) {
           let c = fs.readFileSync(p, 'utf8');
           const noThinking = '&& !model.id.startsWith("gemma")';
           const p1 = 'if (options.thinking?.enabled && model.reasoning) {';

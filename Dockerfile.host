@@ -1,5 +1,5 @@
 # Mercury Host Container
-# Runs the mercury-fork HTTP server (main.ts) on port 8787.
+# Runs the Mercury HTTP server (main.ts) on port 8787.
 # Distinct from container/Dockerfile which builds the inner pi coding-agent image.
 # Base pinned by digest: upstream oven/bun:1 drifted its default user between
 # v0.8.2 and v0.8.5, which silently broke uid-1000-owned state.db on redeploy.
@@ -18,7 +18,7 @@ https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
     apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin && \
     rm -rf /var/lib/apt/lists/*
 
-# ─── Install mercury-fork source at /app ─────────────────────────────────────
+# ─── Install Mercury source at /app ───────────────────────────────────────────
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production

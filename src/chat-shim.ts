@@ -17,6 +17,7 @@ import type {
   ChatInstance,
   Logger,
   Message,
+  OptionsLoadEvent,
   QueueEntry,
   StateAdapter,
   WebhookOptions,
@@ -220,27 +221,25 @@ export function createChatShim(onMessage: MessageCallback): ChatInstance {
       onMessage(adapter, threadId, message);
     },
 
-    processMessage(
+    async processMessage(
       adapter: Adapter,
       threadId: string,
       message: Message | (() => Promise<Message>),
       _options?: WebhookOptions,
-    ): void {
-      void (async () => {
-        try {
-          const msg = typeof message === "function" ? await message() : message;
+    ): Promise<void> {
+      try {
+        const msg = typeof message === "function" ? await message() : message;
 
-          // Skip bot's own messages
-          if (msg.author.isMe) return;
+        // Skip bot's own messages
+        if (msg.author.isMe) return;
 
-          onMessage(adapter, threadId, msg);
-        } catch (err) {
-          chatLogger.error(
-            "processMessage failed",
-            err instanceof Error ? err.message : String(err),
-          );
-        }
-      })();
+        onMessage(adapter, threadId, msg);
+      } catch (err) {
+        chatLogger.error(
+          "processMessage failed",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     },
 
     // Stubs — Mercury doesn't use these Chat SDK features
@@ -252,8 +251,18 @@ export function createChatShim(onMessage: MessageCallback): ChatInstance {
     async processModalSubmit(_event, _contextId?, _options?) {
       return undefined;
     },
+    async processOptionsLoad(
+      _event: OptionsLoadEvent,
+      _options?: WebhookOptions,
+    ) {
+      return undefined;
+    },
     processReaction(_event, _options?): void {},
     processMemberJoinedChannel(_event, _options?): void {},
     processSlashCommand(_event, _options?): void {},
+
+    get transcripts(): never {
+      throw new Error("Transcripts not configured in Mercury chat shim");
+    },
   };
 }

@@ -1,5 +1,5 @@
 /* Canonical design tokens. Source of truth: docs/DESIGN.md §2.
- * Consumed by the Mercury agent dashboard (mercury-fork).
+ * Consumed by the Mercury agent dashboard.
  * The cloud console's globals.css carries a duplicate declaration with
  * matching names; keep both in sync when retuning the palette.
  * Light-mode overrides omitted — dashboard has no theme toggle.

@@ -9,7 +9,7 @@
  * into minimal RUN steps with BuildKit cache mounts for fast rebuilds.
  */
 
-import { execFileSync, execSync, spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";

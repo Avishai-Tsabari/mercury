@@ -1,4 +1,4 @@
-import { execFileSync, execSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path, { dirname } from "node:path";
@@ -262,7 +262,7 @@ export type OAuthSpawnResolution = {
 /**
  * Resolve an Anthropic OAuth credential blob into a fresh bare access token at
  * container-spawn time. This is the single chokepoint for the OAuth credential
- * lifecycle in mercury-fork — it embeds all three container-side steps:
+ * lifecycle in Mercury — it embeds all three container-side steps:
  *   1. refresh the access token when it is within the 60s expiry lookahead,
  *   2. write the refreshed blob back to the console DB,
  *   4. on `invalid_grant`, pull the current blob from the console DB.
@@ -548,12 +548,16 @@ export class AgentContainerRunner {
     try {
       const agentId = process.env.MERCURY_AGENT_ID;
       const filterArgs = [
-        "--filter", `label=${CONTAINER_LABEL}`,
-        ...(agentId ? ["--filter", `label=${AGENT_ID_LABEL_KEY}=${agentId}`] : []),
+        "--filter",
+        `label=${CONTAINER_LABEL}`,
+        ...(agentId
+          ? ["--filter", `label=${AGENT_ID_LABEL_KEY}=${agentId}`]
+          : []),
       ];
       // Find containers with our labels (running or stopped)
       const result = execFileSync(
-        "docker", ["ps", "-a", ...filterArgs, "--format", "{{.ID}}"],
+        "docker",
+        ["ps", "-a", ...filterArgs, "--format", "{{.ID}}"],
         { encoding: "utf8", timeout: 10_000 },
       ).trim();
 

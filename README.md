@@ -52,21 +52,23 @@ Configure identity and adapters in `.env`:
 MERCURY_BOT_USERNAME=Mercury
 MERCURY_TRIGGER_PATTERNS=@Mercury,Mercury
 
-# Enable adapters
+# Enable adapters (pick one or more)
 MERCURY_ENABLE_WHATSAPP=true
 MERCURY_ENABLE_DISCORD=true
 MERCURY_DISCORD_BOT_TOKEN=your-bot-token
+MERCURY_ENABLE_TELEGRAM=true
+MERCURY_TELEGRAM_BOT_TOKEN=your-bot-token
 ```
 
 Start:
 
 ```bash
 mercury run
-# or install as a background service:
+# or install as a background service (macOS/Linux only):
 mercury service install
 ```
 
-> `mercury run` runs in the foreground (good for a first smoke test). For anything long-running, prefer `mercury service install` — it runs in the background and auto-restarts.
+> `mercury run` runs in the foreground — on Windows (WSL2) this is the only option. On macOS/Linux, prefer `mercury service install` for long-running use — it runs in the background and auto-restarts.
 
 ### Set up spaces and conversations
 
@@ -85,6 +87,26 @@ mercury link <id> main             # Link a conversation to a space
 ```
 
 Multiple conversations can point at the same space — they share memory, session, and vault.
+
+### Updating Mercury
+
+```bash
+# 1. Stop Mercury
+#    macOS/Linux: mercury service uninstall
+#    Windows/WSL2: Ctrl+C in the terminal running mercury run
+
+# 2. Update the package
+npm update -g mercury-agent
+
+# 3. Rebuild the agent container image
+mercury build
+
+# 4. Start again
+#    macOS/Linux: mercury service install
+#    Windows/WSL2: mercury run
+```
+
+`mercury build` rebuilds the base agent image from the installed package source. The derived image (base + your extensions) rebuilds automatically on startup when the base changes.
 
 ---
 
