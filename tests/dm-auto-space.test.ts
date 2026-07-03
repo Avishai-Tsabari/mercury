@@ -15,7 +15,7 @@ describe("dm-auto-space", () => {
   const autoSpace: AutoSpaceConfig = {
     enabled: true,
     adminIds: ["972501234567"],
-    defaultSystemPrompt: "You are a barber shop assistant",
+    defaultSystemPrompt: "You are a helpful assistant",
     defaultMemberPermissions: "prompt,prefs.get",
     rateLimitDailyMember: 20,
   };
@@ -98,7 +98,7 @@ describe("dm-auto-space", () => {
       db.getSpaceConfig("dm-972509999999", "role.member.permissions"),
     ).toBe("prompt,prefs.get");
     expect(db.getSpaceConfig("dm-972509999999", "system_prompt")).toBe(
-      "You are a barber shop assistant",
+      "You are a helpful assistant",
     );
     expect(db.getSpaceConfig("dm-972509999999", "rate_limit.member")).toBe(
       "20",

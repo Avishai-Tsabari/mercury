@@ -41,7 +41,7 @@ capability.post("/:name/:action", async (c) => {
   });
 
   // Authorization reuses the permission whose name equals the capability, so a
-  // single grant (e.g. "barber" in member_permissions) gates both the CLI and
+  // single grant (e.g. "rooms" in member_permissions) gates both the CLI and
   // this route.
   const denied = checkPerm(c, name);
   if (denied) return denied;

@@ -111,19 +111,19 @@ describe("active profile persistence", () => {
   test("persist then load round-trips activation", () => {
     const dataDir = path.join(tmpDir, "data");
     const profile = loadProfileFromDir(
-      writeProfile(`name: barber-appointments
+      writeProfile(`name: room-booking
 version: 0.1.0
 member_permissions:
   - prompt
-  - barber
+  - rooms
 system_prompt: |
   Persona line.
 `),
     );
     persistActiveProfile(profile, dataDir);
     const loaded = loadActiveProfile(dataDir);
-    expect(loaded?.name).toBe("barber-appointments");
-    expect(loaded?.memberPermissions).toEqual(["prompt", "barber"]);
+    expect(loaded?.name).toBe("room-booking");
+    expect(loaded?.memberPermissions).toEqual(["prompt", "rooms"]);
     expect(loaded?.systemPrompt).toContain("Persona line.");
   });
 
@@ -132,8 +132,8 @@ system_prompt: |
   });
 
   test("system prompt holder set/get/clear round-trips", () => {
-    setActiveProfileSystemPrompt("You are a barber assistant.");
-    expect(getActiveProfileSystemPrompt()).toBe("You are a barber assistant.");
+    setActiveProfileSystemPrompt("You are a room booking assistant.");
+    expect(getActiveProfileSystemPrompt()).toBe("You are a room booking assistant.");
     setActiveProfileSystemPrompt(null);
     expect(getActiveProfileSystemPrompt()).toBeNull();
   });
@@ -145,8 +145,8 @@ describe("profile-aware permission resolution", () => {
   beforeEach(() => {
     resetPermissions();
     db = new Db(path.join(tmpDir, `perms-${Math.random()}.db`));
-    // Make "barber" a recognized permission so it isn't filtered out.
-    registerPermission("barber", { defaultRoles: [] });
+    // Make "rooms" a recognized permission so it isn't filtered out.
+    registerPermission("rooms", { defaultRoles: [] });
   });
 
   afterEach(() => {
@@ -155,17 +155,17 @@ describe("profile-aware permission resolution", () => {
   });
 
   test("an active profile is the exhaustive member set (replaces defaults)", () => {
-    setActiveProfileMemberPermissions(["prompt", "barber"]);
+    setActiveProfileMemberPermissions(["prompt", "rooms"]);
     const perms = getRolePermissions(db, "main", "member");
     expect(perms.has("prompt")).toBe(true);
-    expect(perms.has("barber")).toBe(true);
+    expect(perms.has("rooms")).toBe(true);
     // prefs.get is a built-in member default — the profile set must REPLACE it.
     expect(perms.has("prefs.get")).toBe(false);
   });
 
   test("raw capability stays out of the member set unless listed", () => {
     registerPermission("gws", { defaultRoles: [] });
-    setActiveProfileMemberPermissions(["prompt", "barber"]);
+    setActiveProfileMemberPermissions(["prompt", "rooms"]);
     const perms = getRolePermissions(db, "main", "member");
     expect(perms.has("gws")).toBe(false);
   });
@@ -173,16 +173,16 @@ describe("profile-aware permission resolution", () => {
   test("admin is unaffected by the active profile", () => {
     setActiveProfileMemberPermissions(["prompt"]);
     const perms = getRolePermissions(db, "main", "admin");
-    expect(perms.has("barber")).toBe(true);
+    expect(perms.has("rooms")).toBe(true);
     expect(perms.has("permissions.set")).toBe(true);
   });
 
   test("an explicit per-space override wins over the profile", () => {
-    setActiveProfileMemberPermissions(["prompt", "barber"]);
+    setActiveProfileMemberPermissions(["prompt", "rooms"]);
     db.setSpaceConfig("main", "role.member.permissions", "prompt");
     const perms = getRolePermissions(db, "main", "member");
     expect(perms.has("prompt")).toBe(true);
-    expect(perms.has("barber")).toBe(false);
+    expect(perms.has("rooms")).toBe(false);
   });
 
   test("clearing the active profile restores built-in member defaults", () => {

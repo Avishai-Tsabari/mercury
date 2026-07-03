@@ -356,8 +356,8 @@ export interface MercuryExtensionAPI {
    * handler stay on the host and never enter the agent container.
    *
    * @example
-   * mercury.capability("barber", async (req, ctx) => {
-   *   if (req.action === "book") return { data: await book(req.callerId, req.body) };
+   * mercury.capability("rooms", async (req, ctx) => {
+   *   if (req.action === "book") return { data: await bookRoom(req.callerId, req.body) };
    *   return { status: 400, data: { error: "unknown action" } };
    * });
    */

@@ -233,34 +233,34 @@ describe("dynamic permissions", () => {
 
 describe("active profile vs seeded permissions", () => {
   test("dm-auto-space seeded permissions yield to active profile", () => {
-    registerPermission("barber", { defaultRoles: [] });
+    registerPermission("rooms", { defaultRoles: [] });
     db.setSpaceConfig(
       "g1",
       "role.member.permissions",
       "prompt,prefs.get",
       "dm-auto-space",
     );
-    setActiveProfileMemberPermissions(["prompt", "prefs.get", "barber"]);
+    setActiveProfileMemberPermissions(["prompt", "prefs.get", "rooms"]);
 
     const perms = getRolePermissions(db, "g1", "member");
     expect(perms.has("prompt")).toBe(true);
     expect(perms.has("prefs.get")).toBe(true);
-    expect(perms.has("barber")).toBe(true);
+    expect(perms.has("rooms")).toBe(true);
   });
 
   test("admin-set permissions still override active profile", () => {
-    registerPermission("barber", { defaultRoles: [] });
+    registerPermission("rooms", { defaultRoles: [] });
     db.setSpaceConfig(
       "g1",
       "role.member.permissions",
       "prompt",
       "admin-user-123",
     );
-    setActiveProfileMemberPermissions(["prompt", "prefs.get", "barber"]);
+    setActiveProfileMemberPermissions(["prompt", "prefs.get", "rooms"]);
 
     const perms = getRolePermissions(db, "g1", "member");
     expect(perms.has("prompt")).toBe(true);
-    expect(perms.has("barber")).toBe(false);
+    expect(perms.has("rooms")).toBe(false);
     expect(perms.has("prefs.get")).toBe(false);
   });
 

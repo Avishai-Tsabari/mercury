@@ -92,7 +92,7 @@
 # credentials never enter the agent container.
 #
 # Env-only override of the active profile name (informational):
-#   MERCURY_PROFILE=barber-appointments
+#   MERCURY_PROFILE=room-booking
 #
 # Host-only signing key for per-turn caller tokens (auto-generated if unset;
 # only set when the API and container-runner run in separate processes):
