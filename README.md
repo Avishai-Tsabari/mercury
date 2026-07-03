@@ -218,7 +218,7 @@ mercury setup              # Interactive guided setup (recommended for new proje
 mercury setup --profile <name>   # Create from a profile (general, coding, research, or path/URL)
 mercury init               # Manual init (creates .env, .mercury structure)
 mercury run
-mercury build              # only needed when developing the base image from source
+mercury build              # rebuild agent container image (required after updates)
 mercury status
 mercury doctor             # preflight check — validates Docker, Bun, credentials, adapters
 
@@ -256,7 +256,7 @@ mercury ext create <name>   # Scaffold a new extension
 mercury ext validate <name> # Validate extension structure and load
 mercury ext test <name>     # Dry-run load extension
 
-# service (recommended for background)
+# service (macOS/Linux only — uses launchd/systemd)
 mercury service install
 mercury service uninstall
 mercury service status
