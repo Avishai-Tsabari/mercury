@@ -1970,15 +1970,33 @@ export function createDashboardRoutes(ctx: DashboardContext) {
 
     const modelSelectorPanel = (() => {
       if (isMultiLeg) {
+        const chainFromEnv = !!process.env.MERCURY_MODEL_CHAIN;
+        const chainYaml = cfg.resolvedModelChain
+          .map(
+            (leg) =>
+              `    - provider: ${leg.provider}\n      model: ${leg.model}`,
+          )
+          .join("\n");
+        const configSnippet = chainFromEnv
+          ? `MERCURY_MODEL_CHAIN='${JSON.stringify(cfg.resolvedModelChain.map((l) => ({ provider: l.provider, model: l.model })))}'`
+          : `model:\n  chain:\n${chainYaml}`;
+        const sourceLabel = chainFromEnv
+          ? `<span class="mono">MERCURY_MODEL_CHAIN</span> env var in <span class="mono">.env</span>`
+          : `<span class="mono">model.chain</span> in <span class="mono">mercury.yaml</span>`;
+
         return `
           <div class="panel" style="margin-bottom:16px">
             <div class="panel-header" style="font-weight:600;font-size:13px">Active model</div>
             <div class="panel-body">
               ${renderModelBlock(cfg)}
               <p class="muted" style="font-size:12px;margin:8px 0 0">
-                Model chain is configured via <span class="mono">mercury.yaml</span> or
-                <span class="mono">MERCURY_MODEL_CHAIN</span> — edit those to change.
+                Configured via ${sourceLabel}. Edit that file to change.
               </p>
+              <details style="margin-top:8px">
+                <summary class="muted" style="font-size:12px;cursor:pointer">Copy config</summary>
+                <pre style="margin:6px 0 0;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius,4px);font-size:12px;overflow-x:auto;cursor:pointer;position:relative"
+                     onclick="navigator.clipboard.writeText(this.textContent.trim());var s=this.querySelector('.copy-hint');if(s){s.textContent='Copied!';setTimeout(function(){s.textContent='Click to copy'},1500)}">${escapeHtml(configSnippet)}<span class="copy-hint muted" style="position:absolute;top:4px;right:8px;font-size:11px">Click to copy</span></pre>
+              </details>
             </div>
           </div>`;
       }
