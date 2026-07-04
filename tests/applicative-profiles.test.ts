@@ -133,7 +133,9 @@ system_prompt: |
 
   test("system prompt holder set/get/clear round-trips", () => {
     setActiveProfileSystemPrompt("You are a room booking assistant.");
-    expect(getActiveProfileSystemPrompt()).toBe("You are a room booking assistant.");
+    expect(getActiveProfileSystemPrompt()).toBe(
+      "You are a room booking assistant.",
+    );
     setActiveProfileSystemPrompt(null);
     expect(getActiveProfileSystemPrompt()).toBeNull();
   });

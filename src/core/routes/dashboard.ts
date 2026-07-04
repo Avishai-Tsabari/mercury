@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { getModels, type KnownProvider } from "@earendil-works/pi-ai";
 import { Hono } from "hono";
 import { html, raw } from "hono/html";
 import { streamSSE } from "hono/streaming";
@@ -115,42 +116,140 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     label: string;
     envVar: string;
     placeholder: string;
+    defaultModel: string;
   }[] = [
     {
       id: "anthropic",
       label: "Anthropic",
       envVar: "MERCURY_ANTHROPIC_API_KEY",
       placeholder: "sk-ant-...",
+      defaultModel: "claude-sonnet-4-6",
     },
     {
       id: "openai",
       label: "OpenAI",
       envVar: "MERCURY_OPENAI_API_KEY",
       placeholder: "sk-...",
+      defaultModel: "gpt-4o",
     },
     {
       id: "google",
       label: "Google Gemini",
       envVar: "MERCURY_GEMINI_API_KEY",
       placeholder: "AIza...",
+      defaultModel: "gemini-2.5-flash",
+    },
+    {
+      id: "deepseek",
+      label: "DeepSeek",
+      envVar: "MERCURY_DEEPSEEK_API_KEY",
+      placeholder: "sk-...",
+      defaultModel: "deepseek-v4-flash",
     },
     {
       id: "groq",
       label: "Groq",
       envVar: "MERCURY_GROQ_API_KEY",
       placeholder: "gsk_...",
+      defaultModel: "llama-3.3-70b-versatile",
     },
     {
       id: "mistral",
       label: "Mistral",
       envVar: "MERCURY_MISTRAL_API_KEY",
       placeholder: "...",
+      defaultModel: "mistral-large-latest",
     },
     {
       id: "openrouter",
       label: "OpenRouter",
       envVar: "MERCURY_OPENROUTER_API_KEY",
       placeholder: "sk-or-...",
+      defaultModel: "meta-llama/llama-3.3-70b-instruct",
+    },
+    {
+      id: "xai",
+      label: "xAI (Grok)",
+      envVar: "MERCURY_XAI_API_KEY",
+      placeholder: "xai-...",
+      defaultModel: "grok-2-latest",
+    },
+    {
+      id: "cerebras",
+      label: "Cerebras",
+      envVar: "MERCURY_CEREBRAS_API_KEY",
+      placeholder: "csk-...",
+      defaultModel: "llama3.1-8b",
+    },
+    {
+      id: "google-vertex",
+      label: "Google Vertex AI",
+      envVar: "MERCURY_GOOGLE_CLOUD_API_KEY",
+      placeholder: "AIza...",
+      defaultModel: "gemini-2.0-flash",
+    },
+    {
+      id: "amazon-bedrock",
+      label: "Amazon Bedrock",
+      envVar: "MERCURY_AWS_BEARER_TOKEN_BEDROCK",
+      placeholder: "...",
+      defaultModel: "amazon.nova-lite-v1:0",
+    },
+    {
+      id: "huggingface",
+      label: "HuggingFace",
+      envVar: "MERCURY_HF_TOKEN",
+      placeholder: "hf_...",
+      defaultModel: "Qwen/Qwen3-235B-A22B-Thinking-2507",
+    },
+    {
+      id: "azure-openai-responses",
+      label: "Azure OpenAI",
+      envVar: "MERCURY_AZURE_OPENAI_API_KEY",
+      placeholder: "...",
+      defaultModel: "gpt-4o",
+    },
+    {
+      id: "vercel-ai-gateway",
+      label: "Vercel AI Gateway",
+      envVar: "MERCURY_AI_GATEWAY_API_KEY",
+      placeholder: "...",
+      defaultModel: "alibaba/qwen-3-235b",
+    },
+    {
+      id: "minimax",
+      label: "MiniMax",
+      envVar: "MERCURY_MINIMAX_API_KEY",
+      placeholder: "...",
+      defaultModel: "MiniMax-M2.7",
+    },
+    {
+      id: "minimax-cn",
+      label: "MiniMax (China)",
+      envVar: "MERCURY_MINIMAX_CN_API_KEY",
+      placeholder: "...",
+      defaultModel: "MiniMax-M2.7",
+    },
+    {
+      id: "zai",
+      label: "ZAI",
+      envVar: "MERCURY_ZAI_API_KEY",
+      placeholder: "...",
+      defaultModel: "glm-4.5",
+    },
+    {
+      id: "kimi-coding",
+      label: "Kimi (Moonshot)",
+      envVar: "MERCURY_KIMI_API_KEY",
+      placeholder: "...",
+      defaultModel: "k2p5",
+    },
+    {
+      id: "github-copilot",
+      label: "GitHub Copilot",
+      envVar: "MERCURY_GITHUB_COPILOT_OAUTH_TOKEN",
+      placeholder: "",
+      defaultModel: "claude-sonnet-4-6",
     },
   ];
 
@@ -1861,7 +1960,85 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       `);
     }
 
-    const _envPath = path.join(projectRoot, ".env");
+    const cfg = core.config;
+    const isMultiLeg = cfg.resolvedModelChain.length > 1;
+    const currentProvider = cfg.resolvedModelChain[0]?.provider ?? "";
+    const currentModel = cfg.resolvedModelChain[0]?.model ?? "";
+    const currentProviderMeta = MODEL_PROVIDERS.find(
+      (p) => p.id === currentProvider,
+    );
+
+    const modelSelectorPanel = (() => {
+      if (isMultiLeg) {
+        return `
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-header" style="font-weight:600;font-size:13px">Active model</div>
+            <div class="panel-body">
+              ${renderModelBlock(cfg)}
+              <p class="muted" style="font-size:12px;margin:8px 0 0">
+                Model chain is configured via <span class="mono">mercury.yaml</span> or
+                <span class="mono">MERCURY_MODEL_CHAIN</span> — edit those to change.
+              </p>
+            </div>
+          </div>`;
+      }
+
+      const providerOptions = MODEL_PROVIDERS.map((p) => {
+        const selected = p.id === currentProvider ? " selected" : "";
+        const keySet = !!process.env[p.envVar];
+        const suffix = keySet ? "" : " (no key)";
+        return `<option value="${escapeHtml(p.id)}"${selected}>${escapeHtml(p.label)}${suffix}</option>`;
+      }).join("");
+
+      const currentInRegistry = getModels(
+        currentProvider as KnownProvider,
+      ).some((m) => m.id === currentModel);
+
+      const modelOptions = getModels(currentProvider as KnownProvider);
+      let modelOptionsHtml: string;
+      if (modelOptions.length === 0) {
+        modelOptionsHtml = `<input type="text" name="model" value="${escapeHtml(currentModel)}" required
+          style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius,4px);font-size:13px;font-family:monospace"
+          placeholder="Enter model ID" />`;
+      } else {
+        const opts = modelOptions
+          .map(
+            (m) =>
+              `<option value="${escapeHtml(m.id)}"${m.id === currentModel ? " selected" : ""}>${escapeHtml(m.name)}</option>`,
+          )
+          .join("");
+        const customOpt =
+          !currentInRegistry && currentModel
+            ? `<option value="${escapeHtml(currentModel)}" selected>${escapeHtml(currentModel)} (not in registry)</option>`
+            : "";
+        modelOptionsHtml = `<select name="model" class="select" style="flex:1;min-width:200px">${customOpt}${opts}</select>`;
+      }
+
+      return `
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-header" style="font-weight:600;font-size:13px">Active model</div>
+          <div class="panel-body">
+            <p class="muted" style="font-size:12px;margin:0 0 10px">
+              Current: <span class="mono">${escapeHtml(currentProvider)}</span> / <span class="mono">${escapeHtml(currentModel)}</span>
+            </p>
+            <form hx-post="/dashboard/api/model/set" hx-target="#keys-feedback" hx-swap="innerHTML"
+                  style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <select name="provider" class="select" style="min-width:160px"
+                      hx-get="/dashboard/api/models" hx-trigger="change"
+                      hx-target="#model-select-container" hx-swap="innerHTML">
+                ${providerOptions}
+              </select>
+              <span id="model-select-container" style="display:flex;flex:1;min-width:200px">
+                ${modelOptionsHtml}
+              </span>
+              <button class="btn btn-sm" type="submit">Save</button>
+            </form>
+            <p id="model-key-warning" class="muted" style="font-size:12px;margin:8px 0 0;${currentProviderMeta && process.env[currentProviderMeta.envVar] ? "display:none" : ""}">
+              No API key set for this provider. Set one below or via <span class="mono">mercury auth login</span>.
+            </p>
+          </div>
+        </div>`;
+    })();
 
     const providerRows = MODEL_PROVIDERS.map((p) => {
       const isSet = !!process.env[p.envVar];
@@ -1899,6 +2076,8 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       </p>
 
       <div id="keys-feedback" style="min-height:4px"></div>
+
+      ${raw(modelSelectorPanel)}
 
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-header" style="font-weight:600;font-size:13px">Model providers</div>
@@ -1992,6 +2171,91 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     setTimeout(() => process.kill(process.pid, "SIGTERM"), 500);
     return c.html(
       renderFeaturesToast("success", `${meta.label} key cleared — restarting…`),
+    );
+  });
+
+  // ─── Model Selector ─────────────────────────────────────────────────────
+
+  app.get("/api/models", (c) => {
+    const provider = c.req.query("provider") ?? "";
+    const meta = MODEL_PROVIDERS.find((p) => p.id === provider);
+    const hasKey = meta ? !!process.env[meta.envVar] : false;
+    const keyWarning = `<p id="model-key-warning" hx-swap-oob="true" class="muted" style="font-size:12px;margin:8px 0 0;${hasKey ? "display:none" : ""}">
+      No API key set for this provider. Set one below or via <span class="mono">mercury auth login</span>.
+    </p>`;
+
+    const models = getModels(provider as KnownProvider);
+    if (models.length === 0) {
+      const placeholder = meta?.defaultModel ?? "model-id";
+      return c.html(
+        `<input type="text" name="model" required placeholder="${escapeHtml(placeholder)}"
+          style="flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius,4px);font-size:13px;font-family:monospace" />${keyWarning}`,
+      );
+    }
+    const options = models
+      .map(
+        (m) =>
+          `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`,
+      )
+      .join("");
+    return c.html(
+      `<select name="model" class="select" style="flex:1;min-width:200px">${options}</select>${keyWarning}`,
+    );
+  });
+
+  app.post("/api/model/set", async (c) => {
+    if (core.config.consoleUrl) {
+      return c.html(
+        renderFeaturesToast(
+          "error",
+          "Model configuration is managed from the Mercury Console.",
+        ),
+      );
+    }
+
+    if (core.config.resolvedModelChain.length > 1) {
+      return c.html(
+        renderFeaturesToast(
+          "error",
+          "Model chain is configured — edit mercury.yaml or MERCURY_MODEL_CHAIN directly.",
+        ),
+      );
+    }
+
+    const form = await c.req.parseBody();
+    const provider =
+      typeof form.provider === "string" ? form.provider.trim() : "";
+    const model = typeof form.model === "string" ? form.model.trim() : "";
+
+    if (!provider) {
+      return c.html(renderFeaturesToast("error", "Provider is required."));
+    }
+    if (!model) {
+      return c.html(renderFeaturesToast("error", "Model is required."));
+    }
+
+    const meta = MODEL_PROVIDERS.find((p) => p.id === provider);
+    const providerLabel = meta?.label ?? provider;
+
+    try {
+      const envPath = path.join(projectRoot, ".env");
+      updateDotEnv(envPath, {
+        MERCURY_MODEL_PROVIDER: provider,
+        MERCURY_MODEL: model,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.html(
+        renderFeaturesToast("error", `Failed to write .env: ${msg}`),
+      );
+    }
+
+    setTimeout(() => process.kill(process.pid, "SIGTERM"), 500);
+    return c.html(
+      renderFeaturesToast(
+        "success",
+        `Model set to ${providerLabel} / ${model} — restarting…`,
+      ),
     );
   });
 
