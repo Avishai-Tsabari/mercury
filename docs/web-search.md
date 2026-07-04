@@ -1,33 +1,34 @@
-# Web Search
+# Web Search & Browsing
 
-Web search is **extension-based** in Mercury.
+Web search is **extension-based** in Mercury. The base agent does not include a browser — install the `web-browser` extension to add search and browsing capabilities.
 
-Mercury core does not ship a built-in browser/search CLI. Instead, install a web automation extension (for example, `pinchtab`) and let the agent use that tool directly.
+## Quick Start
 
----
+```bash
+mercury add web-browser
+```
 
-## Recommended Setup
+Or install from the dashboard's **Features** page (one click).
 
-Use the real example extension at:
+No API key is required. The extension uses [pinchtab](https://www.npmjs.com/package/pinchtab) to control a local headless Chromium and navigates to the public [Brave Search](https://search.brave.com) website — the same way a human would.
 
-- `examples/extensions/pinchtab/`
+## What It Provides
 
-It demonstrates:
+The `web-browser` extension installs pinchtab and Playwright/Chromium into the agent container. The agent can:
 
-- installing browser tooling in the derived image
-- `before_container` hook for runtime env injection
-- system-prompt guidance for consistent search behavior
-
----
+- **Search the web** — navigate to Brave Search, read results
+- **Browse any URL** — open pages, follow links
+- **Extract text** — pull readable content from any page
+- **Take snapshots** — capture the accessibility tree for structured interaction
+- **Fill forms** — click elements, type into fields
+- **Authenticated sessions** — log into sites using injected cookies/localStorage (configured via `MERCURY_BROWSER_SESSIONS`)
 
 ## Typical Flow
 
-1. Start browser automation tool (`pinchtab`)
-2. Navigate to search engine URL (e.g. Brave Search)
-3. Extract text/snapshot content
-4. Summarize and cite key findings
-
-Example command pattern used by agents (see `examples/extensions/pinchtab/` for `pinchtab_ensure` — wait until the bridge listens on `:9867` before calling the CLI; otherwise you get `connection refused`):
+1. Start the browser daemon (`pinchtab_ensure`)
+2. Navigate to a search URL or any page
+3. Extract text or snapshot content
+4. Summarize and cite findings
 
 ```bash
 pinchtab_ensure || exit 1
@@ -36,27 +37,19 @@ sleep 3
 pinchtab text
 ```
 
----
-
 ## Why Extension-Based
 
-- keeps Mercury core lean
-- lets each deployment pick its own browser/search stack
-- allows per-space RBAC for web tooling (`pinchtab` permission)
-- avoids locking users into one provider/tool
-
----
+- Keeps Mercury core lean
+- Lets each deployment pick its own browser/search stack
+- Allows per-space RBAC for web tooling (`pinchtab` permission)
+- Avoids locking users into one provider/tool
 
 ## Security & RBAC
 
-Extension CLIs are called directly in bash, with RBAC enforced by Mercury's in-container permission guard.
-
-If a caller lacks permission for a web extension CLI, execution is blocked.
-
----
+Extension CLIs are called directly in bash, with RBAC enforced by Mercury's in-container permission guard. If a caller lacks the `pinchtab` permission, execution is blocked.
 
 ## Related Docs
 
-- [extensions.md](./extensions.md)
-- [pipeline.md](./pipeline.md)
-- [container-lifecycle.md](./container-lifecycle.md)
+- [Extensions](./extensions.md)
+- [Pipeline](./pipeline.md)
+- [Container lifecycle](./container-lifecycle.md)
