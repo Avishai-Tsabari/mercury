@@ -166,7 +166,7 @@ Install extensions from the dashboard (**Features** page), the CLI, or during se
 
 ```bash
 # From the CLI
-mercury add web-browser         # Web browsing & search (requires MERCURY_BRAVE_API_KEY)
+mercury add web-browser         # Web browsing & search (uses Brave Search, no API key needed)
 mercury add napkin              # Obsidian-style knowledge vault
 
 # Or pick a profile that bundles what you need

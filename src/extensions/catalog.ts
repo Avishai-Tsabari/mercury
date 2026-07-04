@@ -30,7 +30,6 @@ export const EXTENSION_CATALOG: ExtensionCatalogEntry[] = [
       "Web search (Brave) and interactive browser (pinchtab) for sites like Gmail, banks, and forms.",
     category: "automation",
     sourceDir: "pinchtab",
-    requiredEnvVars: ["MERCURY_BRAVE_API_KEY"],
     requiresRestart: true,
   },
   {
