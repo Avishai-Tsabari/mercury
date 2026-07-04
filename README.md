@@ -154,8 +154,26 @@ Each space is a user-defined memory boundary with its own workspace and pi sessi
 | **Permissions** | Role-based access control | [docs/permissions.md](docs/permissions.md) |
 | **Media** | Images, documents, voice notes | [docs/media/overview.md](docs/media/overview.md) |
 | **KB Distillation** | Extract lasting knowledge from chats | [docs/kb-distillation.md](docs/kb-distillation.md) |
+| **Dashboard** | Web UI for managing spaces, tasks, permissions, extensions | [docs/dashboard.md](docs/dashboard.md) |
 | **Extensions** | TypeScript plugins for CLIs, skills, jobs, hooks | [docs/extensions.md](docs/extensions.md) |
 | **DM Auto-Space** | Auto-create isolated spaces per user DM | [docs/rate-limiting.md](docs/rate-limiting.md) |
+
+### Default capabilities vs. extensions
+
+Out of the box, Mercury is a capable chat assistant with conversation context, scheduled tasks, role-based permissions, multi-space management, message recall, and sub-agent delegation. It does **not** include web search, web browsing, a knowledge vault, voice, or third-party service integrations — those are added via extensions.
+
+Install extensions from the dashboard (**Features** page), the CLI, or during setup with a profile:
+
+```bash
+# From the CLI
+mercury add web-browser         # Web browsing & search (requires MERCURY_BRAVE_API_KEY)
+mercury add napkin              # Obsidian-style knowledge vault
+
+# Or pick a profile that bundles what you need
+mercury setup --profile research
+```
+
+Run `mercury extensions list` or visit the dashboard's Features page to see what's available.
 
 ---
 
@@ -449,6 +467,7 @@ mrctl config set trigger_patterns "@Bot,Bot"
 - [Container lifecycle](docs/container-lifecycle.md)
 - [Graceful shutdown](docs/graceful-shutdown.md)
 - [Rate limiting](docs/rate-limiting.md)
+- [Dashboard](docs/dashboard.md)
 - [Extensions](docs/extensions.md)
 
 ---
