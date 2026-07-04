@@ -403,6 +403,9 @@ Supported OAuth providers: Anthropic, GitHub Copilot, Google Gemini CLI, Antigra
 | `MERCURY_CONTAINER_TIMEOUT_MS` | `300000` | Container timeout (5 min) |
 | `MERCURY_CONTAINER_RUNTIME` | `runc` | `runc` (default) or `runsc` ([gVisor](https://gvisor.dev)) |
 | `MERCURY_CONTAINER_BWRAP_DOCKER_COMPAT` | `false` | Set `true` on Linux Docker Engine (see note below) |
+| `MERCURY_AGENT_ID` | — | Unique ID for this assistant (required when running multiple assistants on the same Docker daemon) |
+
+> **Multiple assistants on the same machine:** Mercury builds a derived Docker image (`mercury-agent-ext:<hash>`) from the base image plus your extensions. When a new image is built, older tags in the same repo are pruned. If two assistants share a Docker daemon without distinct `MERCURY_AGENT_ID` values, they share the same image repo and **one will silently prune the other's image**, causing container launch failures. Set `MERCURY_AGENT_ID` to a unique value per project (e.g. in `.env`). Cloud console deployments set this automatically.
 
 > **Linux Docker Engine:** Mercury uses [bubblewrap](https://github.com/containers/bubblewrap) for in-container sandboxing. On Linux Docker Engine (not Docker Desktop), bwrap cannot mount `/proc` without extra privileges. Either set `container_bwrap_docker_compat: true` in `mercury.yaml` (adds `--privileged` to `docker run`), or install [gVisor](https://gvisor.dev/docs/user_guide/install/) and set `MERCURY_CONTAINER_RUNTIME=runsc` to skip bwrap entirely.
 
