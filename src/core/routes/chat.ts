@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { logger } from "../../logger.js";
 import { ensureSpaceWorkspace } from "../../storage/memory.js";
 import type { IngressMessage, MessageAttachment } from "../../types.js";
+import { type AutoSpaceConfig, resolveConversation } from "../conversation.js";
 import { extToMime, mimeToMediaType } from "../media.js";
 import type { MercuryCoreRuntime } from "../runtime.js";
 import { isOverQuota } from "../storage-guard.js";
@@ -54,13 +55,51 @@ export function createChatRoute(core: MercuryCoreRuntime): Hono {
         ? body.callerId.trim()
         : "api:anonymous";
 
-    const spaceId =
+    let spaceId =
       typeof body.spaceId === "string" && body.spaceId.trim()
         ? body.spaceId.trim()
         : "main";
 
     const authorName =
       typeof body.authorName === "string" ? body.authorName.trim() : undefined;
+
+    const platform =
+      typeof body.platform === "string" && body.platform.trim()
+        ? body.platform.trim()
+        : undefined;
+
+    if (platform && platform !== "api") {
+      const autoSpaceConfig: AutoSpaceConfig | undefined = core.config
+        .dmAutoSpaceEnabled
+        ? {
+            enabled: true,
+            adminIds: core.config.dmAutoSpaceAdminIds
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+            defaultSystemPrompt: core.config.dmAutoSpaceDefaultSystemPrompt,
+            defaultMemberPermissions:
+              core.config.dmAutoSpaceDefaultMemberPermissions,
+            rateLimitDailyMember: core.config.rateLimitDailyMember,
+          }
+        : undefined;
+
+      const resolution = resolveConversation(
+        core.db,
+        platform,
+        callerId,
+        "dm",
+        undefined,
+        autoSpaceConfig,
+        authorName,
+      );
+
+      if (!resolution) {
+        return c.json({ error: "Conversation not linked to any space" }, 404);
+      }
+
+      spaceId = resolution.spaceId;
+    }
 
     if (!core.db.getSpace(spaceId)) {
       return c.json({ error: "Space not found" }, 404);
@@ -126,6 +165,9 @@ export function createChatRoute(core: MercuryCoreRuntime): Hono {
     logger.info("API chat inbound", {
       callerId,
       spaceId,
+      ...(platform && platform !== "api"
+        ? { simulatedPlatform: platform }
+        : {}),
       preview: ingress.text.slice(0, 80),
       fileCount: attachments.length,
     });

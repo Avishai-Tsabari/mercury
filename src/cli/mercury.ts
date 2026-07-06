@@ -1940,6 +1940,10 @@ program
   .option("-s, --space <spaceId>", "Space to route the message to", "main")
   .option("-f, --file <paths...>", "Attach files to the message")
   .option("--caller <callerId>", "Caller ID", "cli:user")
+  .option(
+    "--platform <platform>",
+    "Simulate platform for DM auto-space resolution (e.g. whatsapp)",
+  )
   .option("--json", "Output raw JSON response")
   .action(
     async (
@@ -1949,6 +1953,7 @@ program
         space: string;
         file?: string[];
         caller: string;
+        platform?: string;
         json?: boolean;
       },
     ) => {
@@ -1974,6 +1979,10 @@ program
         callerId: options.caller,
         spaceId: options.space,
       };
+
+      if (options.platform) {
+        body.platform = options.platform;
+      }
 
       if (options.file && options.file.length > 0) {
         const files: Array<{ name: string; data: string }> = [];
