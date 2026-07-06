@@ -405,9 +405,16 @@ export class MercuryCoreRuntime {
             : route.role === "admin"
               ? this.config.rateLimitDailyAdmin
               : 0;
-        const effectiveDailyRaw =
-          roleLimitRaw ??
-          (globalDailyLimit > 0 ? String(globalDailyLimit) : null);
+        const isSeededDefault =
+          roleLimitRaw !== null &&
+          this.db.getSpaceConfigUpdatedBy(message.spaceId, roleKey) ===
+            "dm-auto-space";
+        const effectiveDailyRaw = isSeededDefault
+          ? globalDailyLimit > 0
+            ? String(globalDailyLimit)
+            : null
+          : (roleLimitRaw ??
+            (globalDailyLimit > 0 ? String(globalDailyLimit) : null));
         if (effectiveDailyRaw !== null) {
           const roleLimit = Number.parseInt(effectiveDailyRaw, 10);
           if (!Number.isNaN(roleLimit) && roleLimit > 0) {

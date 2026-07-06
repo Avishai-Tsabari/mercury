@@ -486,4 +486,105 @@ describe("Role-based daily rate limiting", () => {
       expect(r.type).toBe("assistant");
     }
   });
+
+  test("dm-auto-space seeded rate limit yields to global config", async () => {
+    runtime.rateLimiter.stopCleanup();
+    runtime.db.close();
+    runtime = createRuntime(tempDir, {
+      rateLimitPerUser: 100,
+      rateLimitDailyMember: 5,
+    });
+    runtime.containerRunner.reply = mock(async () => ({
+      reply: "mocked reply",
+      files: [],
+    }));
+
+    runtime.db.ensureSpace("s1");
+    runtime.db.setSpaceConfig("s1", "rate_limit.member", "2", "dm-auto-space");
+
+    const msg = {
+      platform: "test",
+      spaceId: "s1",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    for (let i = 0; i < 5; i++) {
+      const r = await runtime.handleRawInput(msg, "chat-sdk");
+      expect(r.type).toBe("assistant");
+    }
+
+    const denied = await runtime.handleRawInput(msg, "chat-sdk");
+    expect(denied.type).toBe("denied");
+    expect(denied.reason).toContain("5/5 messages today");
+  });
+
+  test("dashboard-set rate limit overrides global config", async () => {
+    runtime.rateLimiter.stopCleanup();
+    runtime.db.close();
+    runtime = createRuntime(tempDir, {
+      rateLimitPerUser: 100,
+      rateLimitDailyMember: 100,
+    });
+    runtime.containerRunner.reply = mock(async () => ({
+      reply: "mocked reply",
+      files: [],
+    }));
+
+    runtime.db.ensureSpace("s1");
+    runtime.db.setSpaceConfig("s1", "rate_limit.member", "2", "dashboard");
+
+    const msg = {
+      platform: "test",
+      spaceId: "s1",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    const r1 = await runtime.handleRawInput(msg, "chat-sdk");
+    expect(r1.type).toBe("assistant");
+    const r2 = await runtime.handleRawInput(msg, "chat-sdk");
+    expect(r2.type).toBe("assistant");
+
+    const denied = await runtime.handleRawInput(msg, "chat-sdk");
+    expect(denied.type).toBe("denied");
+    expect(denied.reason).toContain("2/2 messages today");
+  });
+
+  test("dm-auto-space seeded limit yields to unlimited global", async () => {
+    runtime.rateLimiter.stopCleanup();
+    runtime.db.close();
+    runtime = createRuntime(tempDir, {
+      rateLimitPerUser: 100,
+      rateLimitDailyMember: 0,
+    });
+    runtime.containerRunner.reply = mock(async () => ({
+      reply: "mocked reply",
+      files: [],
+    }));
+
+    runtime.db.ensureSpace("s1");
+    runtime.db.setSpaceConfig("s1", "rate_limit.member", "2", "dm-auto-space");
+
+    const msg = {
+      platform: "test",
+      spaceId: "s1",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    for (let i = 0; i < 10; i++) {
+      const r = await runtime.handleRawInput(msg, "chat-sdk");
+      expect(r.type).toBe("assistant");
+    }
+  });
 });

@@ -443,7 +443,7 @@ runtime:
 
 `admin_ids` values are platform-specific identifiers — check the dashboard Conversations page to see the format (e.g. WhatsApp LID digits, Telegram numeric user ID).
 
-Auto-created spaces are seeded with `trigger.match=always`, `context.mode=context`, and the configured member permissions. Per-space rate limits are manageable from the dashboard.
+Auto-created spaces are seeded with `trigger.match=always`, `context.mode=context`, and the configured member permissions. Changing `rate_limit_daily_member` in `mercury.yaml` propagates to all auto-created spaces immediately — no per-space update needed. Explicit per-space overrides (set via dashboard or API) still take precedence.
 
 ### Per-space Config
 

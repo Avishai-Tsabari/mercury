@@ -531,16 +531,26 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     const memberRaw = core.db.getSpaceConfig(spaceId, "rate_limit.member");
     const adminRaw = core.db.getSpaceConfig(spaceId, "rate_limit.admin");
 
+    const isSeeded = (key: string) =>
+      core.db.getSpaceConfig(spaceId, key) !== null &&
+      core.db.getSpaceConfigUpdatedBy(spaceId, key) === "dm-auto-space";
+
     const effectiveBurst = burstRaw ?? String(cfg.rateLimitPerUser);
     const effectiveMember =
-      memberRaw ??
-      (cfg.rateLimitDailyMember > 0 ? String(cfg.rateLimitDailyMember) : "0");
+      memberRaw && !isSeeded("rate_limit.member")
+        ? memberRaw
+        : cfg.rateLimitDailyMember > 0
+          ? String(cfg.rateLimitDailyMember)
+          : "0";
     const effectiveAdmin =
-      adminRaw ??
-      (cfg.rateLimitDailyAdmin > 0 ? String(cfg.rateLimitDailyAdmin) : "0");
+      adminRaw && !isSeeded("rate_limit.admin")
+        ? adminRaw
+        : cfg.rateLimitDailyAdmin > 0
+          ? String(cfg.rateLimitDailyAdmin)
+          : "0";
 
     const hasOverride = (key: string) =>
-      core.db.getSpaceConfig(spaceId, key) !== null;
+      core.db.getSpaceConfig(spaceId, key) !== null && !isSeeded(key);
 
     const resetBtn = (key: string) =>
       hasOverride(key)

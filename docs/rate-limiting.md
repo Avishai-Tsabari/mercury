@@ -198,6 +198,16 @@ curl -X PUT http://localhost:8787/api/config \
 | Not set | No daily limit for this role (burst limiter still applies) |
 | Invalid (NaN) | Treated as "not set" |
 
+### Daily limit precedence
+
+When resolving the effective daily limit for a role, Mercury uses this order:
+
+1. **Explicit per-space override** (set via dashboard, `mrctl`, or API) — always wins
+2. **Global config** (`rate_limit_daily_member` / `rate_limit_daily_admin` from `mercury.yaml` or env) — applies to all spaces without an explicit override
+3. **No limit** (0) — if the global config is 0 or unset, no daily cap is enforced
+
+Auto-created DM spaces (from `dm_auto_space`) seed a `rate_limit.member` value on first contact, but this seed is treated as a deployment default, not an admin override. Changing `rate_limit_daily_member` in `mercury.yaml` takes effect immediately across all auto-created spaces — no DB migration or per-space update needed. If you explicitly set a per-space limit via the dashboard or API, that override takes precedence over the global config.
+
 ### How the two layers interact
 
 ```
