@@ -13,6 +13,7 @@ export const BUILTIN_CONFIG_KEYS = new Set([
   "rate_limit",
   "rate_limit.member",
   "rate_limit.admin",
+  "debounce.idle_timeout_ms",
 ]);
 
 /**
@@ -46,6 +47,8 @@ export const BUILTIN_CONFIG_DESCRIPTIONS: Record<string, string> = {
     "Daily message cap for members in this space. Overrides global rate_limit_daily_member. Integer ≥ 1, or 0 for unlimited.",
   "rate_limit.admin":
     "Daily message cap for admins in this space. Overrides global rate_limit_daily_admin. Integer ≥ 1, or 0 for unlimited.",
+  "debounce.idle_timeout_ms":
+    "Milliseconds to wait for additional messages before processing a batch. 0 disables debounce. Platform default: 2000 for WhatsApp/Telegram, 0 for others.",
 };
 
 const BUILTIN_VALIDATORS: Record<string, (v: string) => string | null> = {
@@ -102,6 +105,12 @@ const BUILTIN_VALIDATORS: Record<string, (v: string) => string | null> = {
     return Number.isInteger(n) && n >= 0 && n <= 10000
       ? null
       : "Invalid rate_limit.admin value. Must be an integer between 0 and 10000";
+  },
+  "debounce.idle_timeout_ms": (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n >= 0 && n <= 10000
+      ? null
+      : "Invalid debounce.idle_timeout_ms value. Must be an integer between 0 and 10000";
   },
 };
 

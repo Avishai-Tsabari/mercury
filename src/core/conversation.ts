@@ -86,6 +86,7 @@ export function resolveConversation(
 
   seedSpaceConfigIfAbsent(db, spaceId, "trigger.match", "always");
   seedSpaceConfigIfAbsent(db, spaceId, "context.mode", "context");
+  seedSpaceConfigIfAbsent(db, spaceId, "debounce.idle_timeout_ms", "2000");
   if (autoSpace.defaultMemberPermissions) {
     seedSpaceConfigIfAbsent(
       db,

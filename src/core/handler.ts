@@ -2,12 +2,17 @@ import type { Adapter, Message } from "chat";
 import { telegramInboundLooksLikeMedia } from "../bridges/telegram.js";
 import type { AppConfig } from "../config.js";
 import { logger } from "../logger.js";
-import type { NormalizeContext, PlatformBridge } from "../types.js";
+import type {
+  IngressMessage,
+  NormalizeContext,
+  PlatformBridge,
+} from "../types.js";
 import {
   type AutoSpaceConfig,
   inferConversationKind,
   resolveConversation,
 } from "./conversation.js";
+import { getDefaultDebounceMs, MessageDebouncer } from "./debounce.js";
 import type { MercuryCoreRuntime } from "./runtime.js";
 import { loadTriggerConfig, matchTrigger } from "./trigger.js";
 
@@ -37,6 +42,105 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
         rateLimitDailyMember: config.rateLimitDailyMember,
       }
     : undefined;
+
+  const debouncer = new MessageDebouncer();
+
+  async function processIngress(
+    ingress: IngressMessage,
+    threadId: string,
+  ): Promise<void> {
+    const startTime = Date.now();
+    let lastStatusMessageId: string | undefined;
+    let hadStatusMessage = false;
+
+    const heartbeat = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const statusText = `⏳ Processing… (${elapsed}s)`;
+      const currentId = lastStatusMessageId;
+
+      if (currentId && bridge.editMessage) {
+        bridge
+          .editMessage(threadId, currentId, statusText)
+          .then((ok) => {
+            if (!ok) {
+              bridge
+                .sendReply(threadId, statusText)
+                .then(async (id) => {
+                  await bridge
+                    .deleteMessages?.(threadId, [currentId])
+                    .catch(() => {});
+                  if (id) lastStatusMessageId = id;
+                })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
+      } else {
+        const prevId = lastStatusMessageId;
+        bridge
+          .sendReply(threadId, statusText)
+          .then(async (id) => {
+            if (prevId) {
+              await bridge.deleteMessages?.(threadId, [prevId]).catch(() => {});
+            }
+            if (id) {
+              lastStatusMessageId = id;
+              hadStatusMessage = true;
+            }
+          })
+          .catch(() => {});
+      }
+    }, 30_000);
+
+    let result: Awaited<ReturnType<typeof core.handleRawInput>>;
+    try {
+      result = await core.handleRawInput(ingress, "chat-sdk");
+    } finally {
+      clearInterval(heartbeat);
+    }
+
+    if (lastStatusMessageId) {
+      await bridge
+        .deleteMessages?.(threadId, [lastStatusMessageId])
+        .catch(() => {});
+    }
+
+    if (result.type === "ignore") return;
+
+    if (result.type === "denied") {
+      await bridge.sendReply(threadId, result.reason);
+      return;
+    }
+
+    if (result.result) {
+      const { reply, files, assistantMessageId } = result.result;
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const finalReply =
+        hadStatusMessage && reply
+          ? `${reply}\n\n_(responded in ${elapsed}s)_`
+          : reply;
+      if (finalReply || files.length > 0) {
+        const sentPlatformId = await bridge.sendReply(
+          threadId,
+          finalReply,
+          files.length > 0 ? files : undefined,
+        );
+
+        if (
+          sentPlatformId &&
+          assistantMessageId &&
+          ingress.conversationExternalId
+        ) {
+          core.recordOutboundPlatformId(
+            assistantMessageId,
+            bridge.platform,
+            ingress.conversationExternalId,
+            sentPlatformId,
+          );
+        }
+      }
+    }
+  }
 
   return async (
     adapter: Adapter,
@@ -120,101 +224,38 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
         }
       }
 
-      const startTime = Date.now();
-      let lastStatusMessageId: string | undefined;
-      let hadStatusMessage = false;
+      const isCommand = text.startsWith("/");
+      const shouldProcess =
+        triggerResult.matched || (ingress.isReplyToBot && !isDM);
 
-      const heartbeat = setInterval(() => {
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-        const statusText = `⏳ Processing… (${elapsed}s)`;
-        const currentId = lastStatusMessageId;
+      if (!shouldProcess && !isCommand) return;
 
-        if (currentId && bridge.editMessage) {
-          bridge
-            .editMessage(threadId, currentId, statusText)
-            .then((ok) => {
-              if (!ok) {
-                // Edit failed — fall back to delete+send
-                bridge
-                  .sendReply(threadId, statusText)
-                  .then(async (id) => {
-                    await bridge
-                      .deleteMessages?.(threadId, [currentId])
-                      .catch(() => {});
-                    if (id) lastStatusMessageId = id;
-                  })
-                  .catch(() => {});
-              }
-            })
-            .catch(() => {});
-        } else {
-          const prevId = lastStatusMessageId;
-          bridge
-            .sendReply(threadId, statusText)
-            .then(async (id) => {
-              if (prevId) {
-                await bridge
-                  .deleteMessages?.(threadId, [prevId])
-                  .catch(() => {});
-              }
-              if (id) {
-                lastStatusMessageId = id;
-                hadStatusMessage = true;
-              }
-            })
-            .catch(() => {});
-        }
-      }, 30_000);
+      const debounceKey = `${spaceId}:${ingress.callerId}`;
+      const onFlush = (merged: IngressMessage) =>
+        processIngress(merged, threadId);
 
-      let result: Awaited<ReturnType<typeof core.handleRawInput>>;
-      try {
-        result = await core.handleRawInput(ingress, "chat-sdk");
-      } finally {
-        clearInterval(heartbeat);
-      }
-
-      if (lastStatusMessageId) {
-        await bridge
-          .deleteMessages?.(threadId, [lastStatusMessageId])
-          .catch(() => {});
-      }
-
-      if (result.type === "ignore") return;
-
-      if (result.type === "denied") {
-        await bridge.sendReply(threadId, result.reason);
+      if (isCommand) {
+        debouncer.flushKey(debounceKey, onFlush);
+        await processIngress(ingress, threadId);
         return;
       }
 
-      if (result.result) {
-        const { reply, files, assistantMessageId } = result.result;
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-        const finalReply =
-          hadStatusMessage && reply
-            ? `${reply}\n\n_(responded in ${elapsed}s)_`
-            : reply;
-        if (finalReply || files.length > 0) {
-          const sentPlatformId = await bridge.sendReply(
-            threadId,
-            finalReply,
-            files.length > 0 ? files : undefined,
-          );
+      const configuredMs = core.db.getSpaceConfig(
+        spaceId,
+        "debounce.idle_timeout_ms",
+      );
+      const parsed =
+        configuredMs !== null ? Number.parseInt(configuredMs, 10) : Number.NaN;
+      const timeoutMs = Number.isNaN(parsed)
+        ? getDefaultDebounceMs(bridge.platform)
+        : parsed;
 
-          // Record the platform message ID mapping for the bot's outbound message
-          if (
-            sentPlatformId &&
-            assistantMessageId &&
-            ingress.conversationExternalId
-          ) {
-            core.recordOutboundPlatformId(
-              assistantMessageId,
-              bridge.platform,
-              ingress.conversationExternalId,
-              sentPlatformId,
-            );
-          }
-        }
+      if (timeoutMs <= 0) {
+        await processIngress(ingress, threadId);
+        return;
       }
+
+      debouncer.submit(debounceKey, ingress, timeoutMs, onFlush);
     } catch (err) {
       logger.error("Message handler error", {
         platform: bridge.platform,
