@@ -19,6 +19,8 @@ export interface ExtensionCatalogEntry {
   /** Subdirectory of `examples/extensions/` to copy from */
   sourceDir: string;
   requiredEnvVars?: string[];
+  /** Host-level prerequisites (CLI tools, system packages) shown to the user before install */
+  prerequisites?: string[];
   requiresRestart: boolean;
 }
 
@@ -39,6 +41,7 @@ export const EXTENSION_CATALOG: ExtensionCatalogEntry[] = [
       "Obsidian-style vault, napkin CLI, and optional KB distillation job.",
     category: "knowledge",
     sourceDir: "napkin",
+    prerequisites: ["pi CLI: bun install -g @earendil-works/pi-coding-agent"],
     requiresRestart: true,
   },
   {

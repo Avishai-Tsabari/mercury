@@ -1698,11 +1698,14 @@ export function createDashboardRoutes(ctx: DashboardContext) {
                 .filter(Boolean)
                 .join(", ");
               const label = cat?.label ?? ext.name;
+              const prereqHint = cat?.prerequisites?.length
+                ? `<div class="muted" style="font-size:12px;margin-top:4px">Requires: ${escapeHtml(cat.prerequisites.join(", "))}</div>`
+                : "";
               return `
               <tr>
                 <td class="mono">${escapeHtml(ext.name)}</td>
                 <td>${escapeHtml(label)}</td>
-                <td class="muted" style="max-width:320px">${escapeHtml(desc)}</td>
+                <td class="muted" style="max-width:320px">${escapeHtml(desc)}${prereqHint}</td>
                 <td class="muted">${escapeHtml(feats || "—")}</td>
                 <td>
                   <button type="button" class="btn btn-sm btn-danger"
@@ -1731,6 +1734,9 @@ export function createDashboardRoutes(ctx: DashboardContext) {
               const envHint = entry.requiredEnvVars?.length
                 ? `<div class="muted" style="font-size:12px;margin-top:4px">Env: ${escapeHtml(entry.requiredEnvVars.join(", "))}</div>`
                 : "";
+              const prereqHint = entry.prerequisites?.length
+                ? `<div class="muted" style="font-size:12px;margin-top:4px">Requires: ${escapeHtml(entry.prerequisites.join(", "))}</div>`
+                : "";
               const installBtn = missing
                 ? `<button type="button" class="btn btn-sm" disabled title="examples/extensions missing in this install">Unavailable</button>`
                 : `<form style="display:inline" hx-post="/dashboard/api/extensions/install" hx-target="#features-toast" hx-swap="innerHTML">
@@ -1744,6 +1750,7 @@ export function createDashboardRoutes(ctx: DashboardContext) {
                 <td class="muted" style="max-width:320px">
                   ${escapeHtml(entry.description)}
                   ${envHint}
+                  ${prereqHint}
                 </td>
                 <td class="muted">${escapeHtml(entry.category)}</td>
                 <td>${installBtn}</td>

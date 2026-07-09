@@ -18,6 +18,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { loadConfig, resolveProjectPath } from "../config.js";
+import { getCatalogEntryByName } from "../extensions/catalog.js";
 import {
   checkExtensionIndexLoads,
   getProjectDataDir,
@@ -1930,6 +1931,13 @@ function extensionsListAction(): void {
     console.log(
       `${ext.name.padEnd(nameWidth)}  ${features.padEnd(featWidth)}${tag}${desc}`,
     );
+    const cat = getCatalogEntryByName(ext.name);
+    if (cat?.prerequisites?.length) {
+      const prereq = cat.prerequisites.join(", ");
+      console.log(
+        `${"".padEnd(nameWidth)}  ${"".padEnd(featWidth)}  Requires: ${prereq.slice(0, 60)}${prereq.length > 60 ? "…" : ""}`,
+      );
+    }
   }
 }
 
