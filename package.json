@@ -24,6 +24,10 @@
       "types": "./src/extensions/types.ts",
       "default": "./src/extensions/types.ts"
     },
+    "./storage/pi-auth": {
+      "types": "./src/storage/pi-auth.ts",
+      "default": "./src/storage/pi-auth.ts"
+    },
     "./tts": {
       "types": "./src/tts/index.ts",
       "default": "./src/tts/index.ts"

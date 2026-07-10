@@ -11,6 +11,7 @@ import {
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
+import { getApiKeyFromPiAuthFile } from "mercury-agent/storage/pi-auth";
 
 const KNOWLEDGE_DIR = "knowledge";
 const VAULT_DIRS = ["people", "projects", "references", "daily", "episodes", "weekly", "monthly", "templates"];
@@ -175,6 +176,7 @@ function runPromptAgent(
   vaultDir: string,
   promptPath: string,
   instruction: string,
+  extraEnv?: Record<string, string>,
 ): Promise<{ ok: boolean; detail?: string }> {
   let promptText: string;
   try {
@@ -206,7 +208,7 @@ function runPromptAgent(
       ],
       {
         cwd: vaultDir,
-        env: envWithPiOnPath(),
+        env: { ...envWithPiOnPath(), ...extraEnv },
         // Capture stderr (a background job has no console to inherit usefully):
         // the captured tail is what makes a non-zero exit diagnosable in logs.
         stdio: ["ignore", "inherit", "pipe"],
@@ -236,11 +238,13 @@ function runPromptAgent(
 function runDistiller(
   vaultDir: string,
   dateFile: string,
+  extraEnv?: Record<string, string>,
 ): Promise<{ ok: boolean; detail?: string }> {
   return runPromptAgent(
     vaultDir,
     KB_DISTILLER_PROMPT_PATH,
     `Distill knowledge from: ${dateFile}`,
+    extraEnv,
   );
 }
 
@@ -400,6 +404,38 @@ export default function (mercury: {
   });
 
   // ---------------------------------------------------------------------------
+  // LLM credential resolution for host-side pi spawns
+  // ---------------------------------------------------------------------------
+
+  async function resolvePiAuthEnv(config: {
+    authPath?: string;
+    globalDir: string;
+    modelProvider: string;
+  }): Promise<Record<string, string>> {
+    const env: Record<string, string> = {};
+
+    // 1. Explicit env vars (strip MERCURY_ prefix, matching container-runner)
+    if (process.env.MERCURY_ANTHROPIC_API_KEY) {
+      env.ANTHROPIC_API_KEY = process.env.MERCURY_ANTHROPIC_API_KEY;
+    }
+    if (process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN) {
+      env.ANTHROPIC_API_KEY = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+    }
+
+    // 2. Fall back to Mercury's auth.json (OAuth token refresh)
+    if (!env.ANTHROPIC_API_KEY) {
+      const authPath = config.authPath ?? join(config.globalDir, "auth.json");
+      const key = await getApiKeyFromPiAuthFile({
+        provider: config.modelProvider,
+        authPath,
+      });
+      if (key) env.ANTHROPIC_API_KEY = key;
+    }
+
+    return env;
+  }
+
+  // ---------------------------------------------------------------------------
   // KB Distillation job
   // ---------------------------------------------------------------------------
 
@@ -416,6 +452,8 @@ export default function (mercury: {
           ctx.log.error("Database not found", { dbPath });
           return;
         }
+
+        const piAuthEnv = await resolvePiAuthEnv(ctx.config);
 
         const db = new Database(dbPath, { readonly: true });
 
@@ -561,7 +599,7 @@ export default function (mercury: {
           // --- Step 6: Distill each eligible date ---
           for (const date of eligibleDates) {
             const dateFile = join(messagesDir, `${date}.jsonl`);
-            const result = await runDistiller(knowledgeDir, dateFile);
+            const result = await runDistiller(knowledgeDir, dateFile, piAuthEnv);
             if (result.ok) {
               ctx.log.info("Distillation complete", { spaceId, date });
               // Only persist past dates to distilled set (today will always be re-checked)
@@ -642,6 +680,9 @@ export default function (mercury: {
 
         const dbPath = join(ctx.config.dataDir, "state.db");
         if (!existsSync(dbPath)) return;
+
+        const piAuthEnv = await resolvePiAuthEnv(ctx.config);
+
         const db = new Database(dbPath, { readonly: true });
 
         const spaces = db
@@ -706,6 +747,7 @@ export default function (mercury: {
                 knowledgeDir,
                 WEEKLY_CONSOLIDATION_PROMPT_PATH,
                 instruction,
+                piAuthEnv,
               );
               if (result.ok) {
                 ctx.log.info("Weekly consolidation complete", { spaceId, week });
@@ -777,6 +819,7 @@ export default function (mercury: {
                   knowledgeDir,
                   MONTHLY_CONSOLIDATION_PROMPT_PATH,
                   instruction,
+                  piAuthEnv,
                 );
                 if (result.ok) {
                   ctx.log.info("Monthly consolidation complete", {
