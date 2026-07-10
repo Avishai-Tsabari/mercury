@@ -65,4 +65,11 @@ jobs:
       # Provenance is attached automatically by trusted publishing (no
       # --provenance flag needed); it requires a PUBLIC source repo.
       - name: Publish to npm (trusted publishing)
-        run: npm publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if echo "$VERSION" | grep -q '-'; then
+            TAG=$(echo "$VERSION" | sed 's/.*-\([a-z]*\).*/\1/')
+            npm publish --tag "$TAG"
+          else
+            npm publish
+          fi
