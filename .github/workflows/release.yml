@@ -52,7 +52,7 @@ jobs:
       # only engages when no token is configured.
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
 
       # Trusted publishing needs npm >= 11.5.1; ensure a recent CLI.
       - run: npm install -g npm@latest
