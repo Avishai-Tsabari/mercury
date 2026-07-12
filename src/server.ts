@@ -362,6 +362,7 @@ export function createApp(ctx: ServerContext): Hono {
     scheduler: core.scheduler,
     registry: ctx.registry,
     configRegistry: ctx.configRegistry,
+    runtime: core,
   });
 
   app.route("/api", apiApp);

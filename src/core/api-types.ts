@@ -7,6 +7,7 @@ import { logger } from "../logger.js";
 import type { Db } from "../storage/db.js";
 import type { TradeStationFetch } from "../tradestation/host-api.js";
 import { hasPermission } from "./permissions.js";
+import type { MercuryCoreRuntime } from "./runtime.js";
 import type { SpaceQueue } from "./space-queue.js";
 import type { TaskScheduler } from "./task-scheduler.js";
 
@@ -22,6 +23,8 @@ export interface ApiContext {
   configRegistry: ConfigRegistry;
   /** Optional mock for TradeStation HTTP in tests */
   tradeStationFetch?: TradeStationFetch;
+  /** Runtime reference for cross-space operations (broadcast) */
+  runtime?: MercuryCoreRuntime;
 }
 
 export interface AuthContext {

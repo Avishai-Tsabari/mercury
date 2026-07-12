@@ -72,6 +72,7 @@ export class MercuryCoreRuntime {
   private readonly shutdownHooks: ShutdownHook[] = [];
   private readonly pauseTimers = new Map<string, NodeJS.Timeout>();
   private messageSender: MessageSender | undefined;
+  private broadcastInProgress = false;
   private shuttingDown = false;
   private signalHandlersInstalled = false;
 
@@ -291,6 +292,63 @@ export class MercuryCoreRuntime {
         this.deliverTaskOutput(task.spaceId, result.reply);
       }
     });
+  }
+
+  getMessageSender(): MessageSender | undefined {
+    return this.messageSender;
+  }
+
+  async broadcastToAutoSpaces(text: string): Promise<{
+    total: number;
+    delivered: number;
+    failed: number;
+    errors: Array<{ spaceId: string; error: string }>;
+  }> {
+    if (!this.messageSender) {
+      throw new Error("MessageSender not initialized");
+    }
+    if (this.broadcastInProgress) {
+      throw new Error("Broadcast already in progress");
+    }
+
+    this.broadcastInProgress = true;
+    try {
+      const spaces = this.db.listSpaces().filter((s) => s.id.startsWith("dm-"));
+
+      const errors: Array<{ spaceId: string; error: string }> = [];
+      let delivered = 0;
+
+      for (let i = 0; i < spaces.length; i++) {
+        const space = spaces[i];
+        try {
+          await this.messageSender.send(space.id, text);
+          delivered++;
+        } catch (err) {
+          errors.push({
+            spaceId: space.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        if (i < spaces.length - 1) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+      }
+
+      logger.info("Broadcast complete", {
+        total: spaces.length,
+        delivered,
+        failed: errors.length,
+      });
+
+      return {
+        total: spaces.length,
+        delivered,
+        failed: errors.length,
+        errors,
+      };
+    } finally {
+      this.broadcastInProgress = false;
+    }
   }
 
   private deliverTaskOutput(spaceId: string, text: string): void {

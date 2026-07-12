@@ -4,6 +4,7 @@ import type { ApiContext, AuthContext, Env } from "./api-types.js";
 import { verifyCallerToken } from "./caller-token.js";
 import { resolveRole } from "./permissions.js";
 import {
+  broadcast,
   capability,
   config,
   connections,
@@ -111,6 +112,7 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
   app.route("/tradestation", tradestation);
   app.route("/tts", tts);
   app.route("/capability", capability);
+  app.route("/broadcast", broadcast);
 
   // ─── Fallback ───────────────────────────────────────────────────────────
 
