@@ -445,6 +445,21 @@ runtime:
 
 Auto-created spaces are seeded with `trigger.match=always`, `context.mode=context`, and the configured member permissions. Changing `rate_limit_daily_member` in `mercury.yaml` propagates to all auto-created spaces immediately — no per-space update needed. Explicit per-space overrides (set via dashboard or API) still take precedence.
 
+#### Broadcast
+
+Send a message to all auto-created DM spaces at once (e.g. maintenance notices, promotions):
+
+```bash
+curl -X POST http://localhost:8787/api/broadcast \
+  -H "Authorization: Bearer $API_SECRET" \
+  -H "X-Mercury-Caller: <your-admin-id>" \
+  -H "X-Mercury-Space: main" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Maintenance tonight 10pm-2am."}'
+```
+
+Returns `{ total, delivered, failed, errors }`. Only global admins (`admins` or `dm_auto_space.admin_ids`) may broadcast. Messages are sent as literal text — no LLM processing.
+
 ### Per-space Config
 
 Conversations are discovered from incoming traffic. Unlinked conversations stay idle until you attach them to a space via `mercury link <conversation-id> <space-id>` or the dashboard.
