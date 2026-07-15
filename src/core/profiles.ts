@@ -68,7 +68,7 @@ export const profileSchema = z.object({
    */
   member_permissions: z.array(z.string()).optional(),
   /** Profile-specific agent persona, injected into the container. */
-  system_prompt: z.string().optional(),
+  profile_prompt: z.string().optional(),
 });
 
 export type MercuryProfile = z.infer<typeof profileSchema>;
@@ -178,7 +178,7 @@ export interface ActiveProfile {
   /** Exhaustive member permission set, or null when the profile doesn't scope members. */
   memberPermissions: string[] | null;
   /** Profile agent persona, or null. */
-  systemPrompt: string | null;
+  profilePrompt: string | null;
 }
 
 const ACTIVE_PROFILE_FILE = "active-profile.json";
@@ -191,7 +191,7 @@ export function persistActiveProfile(
   const activation: ActiveProfile = {
     name: profile.name,
     memberPermissions: profile.member_permissions ?? null,
-    systemPrompt: profile.system_prompt ?? null,
+    profilePrompt: profile.profile_prompt ?? null,
   };
   mkdirSync(dataDir, { recursive: true });
   writeFileSync(
@@ -205,7 +205,12 @@ export function loadActiveProfile(dataDir: string): ActiveProfile | null {
   const file = join(dataDir, ACTIVE_PROFILE_FILE);
   if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(file, "utf-8")) as ActiveProfile;
+    const raw = JSON.parse(readFileSync(file, "utf-8"));
+    return {
+      name: raw.name,
+      memberPermissions: raw.memberPermissions ?? null,
+      profilePrompt: raw.profilePrompt ?? raw.systemPrompt ?? null,
+    };
   } catch {
     return null;
   }
@@ -216,16 +221,16 @@ export function loadActiveProfile(dataDir: string): ActiveProfile | null {
  * every container's system prompt. Held here so the runtime can read it without
  * re-reading the manifest per message.
  */
-let activeProfileSystemPrompt: string | null = null;
+let activeProfilePromptValue: string | null = null;
 
-/** Set (or clear, with null) the active profile's system prompt. */
-export function setActiveProfileSystemPrompt(prompt: string | null): void {
-  activeProfileSystemPrompt = prompt;
+/** Set (or clear, with null) the active profile's prompt. */
+export function setActiveProfilePrompt(prompt: string | null): void {
+  activeProfilePromptValue = prompt;
 }
 
-/** The active profile's system prompt, or null when no profile scopes it. */
-export function getActiveProfileSystemPrompt(): string | null {
-  return activeProfileSystemPrompt;
+/** The active profile's prompt, or null when no profile scopes it. */
+export function getActiveProfilePrompt(): string | null {
+  return activeProfilePromptValue;
 }
 
 /**

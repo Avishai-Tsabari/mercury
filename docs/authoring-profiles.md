@@ -44,7 +44,7 @@ env:
     default: "09:00-18:00"
 
 # Project-wide agent persona, injected into every container's system prompt.
-system_prompt: |
+profile_prompt: |
   You are a meeting room booking assistant. Help each user book, view, and
   cancel ONLY their own reservations. Never reveal other users' bookings.
 

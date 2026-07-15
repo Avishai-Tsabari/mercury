@@ -25,7 +25,7 @@ import type {
 } from "../types.js";
 import { formatCategoryHelp, formatHelp } from "./commands.js";
 import { hasPermission, resolveRole } from "./permissions.js";
-import { getActiveProfileSystemPrompt } from "./profiles.js";
+import { getActiveProfilePrompt } from "./profiles.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { type RouteResult, routeInput } from "./router.js";
 import { SpaceQueue } from "./space-queue.js";
@@ -1290,7 +1290,7 @@ export class MercuryCoreRuntime {
 
       // Inject the active applicative profile persona (project-wide), ahead of
       // any per-space system prompt so a space-specific prompt refines it.
-      const profilePrompt = getActiveProfileSystemPrompt();
+      const profilePrompt = getActiveProfilePrompt();
       if (profilePrompt) {
         const existing = extraEnv?.MERCURY_EXT_SYSTEM_PROMPT;
         extraEnv = {

@@ -266,7 +266,7 @@ function buildCapabilitySection(
  * lines plus all Mercury platform content. This is appended after pi's own default system prompt.
  *
  * In override mode (skipIdentity=true): omits the "You are Claude Code" preamble since the outer
- * wrapper in buildSystemPrompt provides the identity. Mercury identity ("You are Mercury") and all
+ * wrapper in buildSystemPrompt provides the identity. Bot identity (from BOT_USERNAME env) and all
  * platform content (inbox/outbox, docs reference, permissions, moderation) are retained.
  */
 function buildMercuryAdditions(
@@ -279,9 +279,11 @@ function buildMercuryAdditions(
   const claudeCodePreamble = `You are Claude Code, Anthropic's official CLI for Claude.
 Prioritize practical outputs and explicit assumptions.`;
 
+  const botName = process.env.BOT_USERNAME || "Mercury";
+
   const mercuryPlatform = `Files received from users (images, documents, voice notes) are saved to the \`inbox/\` directory in the current workspace. To send files back with your reply, write them to the \`outbox/\` directory — any files created or modified there during this run will be automatically attached to your response.
 
-You are Mercury, built from https://github.com/Avishai-Tsabari/mercury. When users ask about Mercury — what it can do, how to configure it, scheduling, permissions, extensions, or anything about the platform — you MUST read from \`/docs/mercury/\` before answering. Start with \`/docs/mercury/README.md\` for an overview, then check \`/docs/mercury/docs/\` for detailed guides.
+You are ${botName}. You run on the Mercury platform (https://github.com/Avishai-Tsabari/mercury). When users ask about the platform — what it can do, how to configure it, scheduling, permissions, extensions, or anything about Mercury — you MUST read from \`/docs/mercury/\` before answering. Start with \`/docs/mercury/README.md\` for an overview, then check \`/docs/mercury/docs/\` for detailed guides.
 
 ## Permissions & Security
 Each run is triggered by a specific caller with a role (admin or member). The caller's identity and role are provided in the user prompt as a <caller /> tag.
@@ -707,6 +709,9 @@ function buildBwrapArgs(
     "--bind",
     "/home/mercury",
     "/home/mercury",
+    "--ro-bind",
+    "/home/mercury/.pi/agent",
+    "/home/mercury/.pi/agent",
     "--proc",
     "/proc",
     "--dev",

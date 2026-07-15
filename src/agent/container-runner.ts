@@ -871,6 +871,7 @@ export class AgentContainerRunner {
         key: "OVERRIDE_PI_SYSTEM_PROMPT",
         value: this.config.overridePiSystemPrompt ? "true" : "false",
       },
+      { key: "BOT_USERNAME", value: this.config.botUsername },
     ].filter((x): x is { key: string; value: string } => Boolean(x.value));
 
     const containerName = this.generateContainerName();
@@ -965,7 +966,7 @@ export class AgentContainerRunner {
       "-v",
       `${innerSpaceDir}:/spaces/${input.spaceId}`,
       "-v",
-      `${innerGlobalDir}:/home/mercury/.pi/agent`,
+      `${innerGlobalDir}:/home/mercury/.pi/agent:ro`,
       "-v",
       `${readmePath}:/docs/mercury/README.md:ro`,
       "-v",

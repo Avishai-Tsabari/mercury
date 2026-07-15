@@ -9,11 +9,11 @@ import {
   setActiveProfileMemberPermissions,
 } from "../src/core/permissions.js";
 import {
-  getActiveProfileSystemPrompt,
+  getActiveProfilePrompt,
   loadActiveProfile,
   loadProfileFromDir,
   persistActiveProfile,
-  setActiveProfileSystemPrompt,
+  setActiveProfilePrompt,
   validateProfileCapabilities,
 } from "../src/core/profiles.js";
 import { Db } from "../src/storage/db.js";
@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe("applicative profile schema", () => {
-  test("parses capabilities, member_permissions, and multiline system_prompt", () => {
+  test("parses capabilities, member_permissions, and multiline profile_prompt", () => {
     const dir = writeProfile(`name: room-booking
 description: Meeting room booking assistant
 version: 0.1.0
@@ -45,7 +45,7 @@ member_permissions:
   - prompt
   - prefs.get
   - rooms
-system_prompt: |
+profile_prompt: |
   You are a meeting room booking assistant.
   Help each user with only their own reservations.
 `);
@@ -57,8 +57,8 @@ system_prompt: |
       "prefs.get",
       "rooms",
     ]);
-    expect(profile.system_prompt).toContain("room booking assistant");
-    expect(profile.system_prompt).toContain("only their own reservations");
+    expect(profile.profile_prompt).toContain("room booking assistant");
+    expect(profile.profile_prompt).toContain("only their own reservations");
   });
 
   test("defaults capabilities to [] and leaves optional fields undefined", () => {
@@ -68,7 +68,7 @@ version: 0.1.0
     const profile = loadProfileFromDir(dir);
     expect(profile.capabilities).toEqual([]);
     expect(profile.member_permissions).toBeUndefined();
-    expect(profile.system_prompt).toBeUndefined();
+    expect(profile.profile_prompt).toBeUndefined();
   });
 
   test("rejects an invalid profile name", () => {
@@ -116,7 +116,7 @@ version: 0.1.0
 member_permissions:
   - prompt
   - rooms
-system_prompt: |
+profile_prompt: |
   Persona line.
 `),
     );
@@ -124,20 +124,33 @@ system_prompt: |
     const loaded = loadActiveProfile(dataDir);
     expect(loaded?.name).toBe("room-booking");
     expect(loaded?.memberPermissions).toEqual(["prompt", "rooms"]);
-    expect(loaded?.systemPrompt).toContain("Persona line.");
+    expect(loaded?.profilePrompt).toContain("Persona line.");
   });
 
   test("loadActiveProfile returns null when no profile applied", () => {
     expect(loadActiveProfile(path.join(tmpDir, "empty"))).toBeNull();
   });
 
-  test("system prompt holder set/get/clear round-trips", () => {
-    setActiveProfileSystemPrompt("You are a room booking assistant.");
-    expect(getActiveProfileSystemPrompt()).toBe(
-      "You are a room booking assistant.",
+  test("loadActiveProfile migrates old systemPrompt field to profilePrompt", () => {
+    const dataDir = path.join(tmpDir, "legacy");
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dataDir, "active-profile.json"),
+      JSON.stringify({
+        name: "legacy-profile",
+        memberPermissions: null,
+        systemPrompt: "Old persona line.",
+      }),
     );
-    setActiveProfileSystemPrompt(null);
-    expect(getActiveProfileSystemPrompt()).toBeNull();
+    const loaded = loadActiveProfile(dataDir);
+    expect(loaded?.profilePrompt).toBe("Old persona line.");
+  });
+
+  test("profile prompt holder set/get/clear round-trips", () => {
+    setActiveProfilePrompt("You are a room booking assistant.");
+    expect(getActiveProfilePrompt()).toBe("You are a room booking assistant.");
+    setActiveProfilePrompt(null);
+    expect(getActiveProfilePrompt()).toBeNull();
   });
 });
 
