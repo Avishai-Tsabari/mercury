@@ -279,7 +279,8 @@ function buildMercuryAdditions(
   const claudeCodePreamble = `You are Claude Code, Anthropic's official CLI for Claude.
 Prioritize practical outputs and explicit assumptions.`;
 
-  const botName = process.env.BOT_USERNAME || "Mercury";
+  const raw = process.env.BOT_USERNAME || "Mercury";
+  const botName = raw.charAt(0).toUpperCase() + raw.slice(1);
 
   const mercuryPlatform = `Files received from users (images, documents, voice notes) are saved to the \`inbox/\` directory in the current workspace. To send files back with your reply, write them to the \`outbox/\` directory — any files created or modified there during this run will be automatically attached to your response.
 
