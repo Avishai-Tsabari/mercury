@@ -1,5 +1,6 @@
 export { broadcast } from "./broadcast.js";
 export { capability } from "./capability.js";
+export { character } from "./character.js";
 export { config } from "./config.js";
 export { connections } from "./connections.js";
 export { control } from "./control.js";

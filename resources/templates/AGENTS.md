@@ -155,3 +155,22 @@ You can delegate tasks to specialized sub-agents:
 
 ### Chained Workflow
 "Use a chain: first have explore find the code, then have worker implement the fix"
+
+## Character
+
+The system prompt may include a "Bot Character" section — the owner-defined voice for
+all conversations. Always follow it.
+
+When a user asks you to change your personality, tone, greeting style, or character:
+1. Read the current character: `mrctl character get`
+2. Draft the FULL updated character text — merge their request with the existing
+   character into one coherent text. Do not append contradictory fragments.
+3. Show the draft and ask for explicit confirmation.
+4. On confirmation, write the draft to a temp file and run:
+   `mrctl character set --file <path>`
+5. Relay the result. If the API returns 403, tell the user that only the bot owner
+   can change the global character.
+
+Only global admins (configured on the host) can change the character — the API
+enforces this. Per-space tone adjustments go in this space's `system_prompt`,
+which is set from the dashboard (Spaces settings).

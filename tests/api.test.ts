@@ -1267,3 +1267,112 @@ describe("POST /api/tts/synthesize", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── Character API ────────────────────────────────────────────────────────
+
+describe("GET /api/character", () => {
+  test("global admin gets current character (unset)", async () => {
+    const { status, data } = await api("GET", "/api/character", {
+      callerId: "admin1",
+    });
+    expect(status).toBe(200);
+    expect(data.character).toBeNull();
+  });
+
+  test("global admin gets current character (set)", async () => {
+    db.setProjectConfig("character", "Be formal", "admin1");
+    const { status, data } = await api("GET", "/api/character", {
+      callerId: "admin1",
+    });
+    expect(status).toBe(200);
+    expect(data.character).toBe("Be formal");
+    expect(data.updatedBy).toBe("admin1");
+  });
+
+  test("non-admin gets 403", async () => {
+    const { status, data } = await api("GET", "/api/character", {
+      callerId: "member1",
+    });
+    expect(status).toBe(403);
+    expect(data.error).toContain("global admin");
+  });
+
+  test("space admin (non-global) gets 403", async () => {
+    db.setRole("group1", "space-admin-user", "admin", "system");
+    const { status } = await api("GET", "/api/character", {
+      callerId: "space-admin-user",
+    });
+    expect(status).toBe(403);
+  });
+});
+
+describe("PUT /api/character", () => {
+  test("global admin sets character", async () => {
+    const { status, data } = await api("PUT", "/api/character", {
+      callerId: "admin1",
+      body: { text: "Be warm and friendly" },
+    });
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(db.getProjectConfig("character")).toBe("Be warm and friendly");
+  });
+
+  test("non-admin gets 403", async () => {
+    const { status } = await api("PUT", "/api/character", {
+      callerId: "member1",
+      body: { text: "hijacked" },
+    });
+    expect(status).toBe(403);
+    expect(db.getProjectConfig("character")).toBeNull();
+  });
+
+  test("empty text returns 400", async () => {
+    const { status, data } = await api("PUT", "/api/character", {
+      callerId: "admin1",
+      body: { text: "" },
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("empty");
+  });
+
+  test("text > 4000 chars returns 400", async () => {
+    const longText = "a".repeat(4001);
+    const { status, data } = await api("PUT", "/api/character", {
+      callerId: "admin1",
+      body: { text: longText },
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("4000");
+  });
+
+  test("text exactly 4000 chars succeeds", async () => {
+    const text = "a".repeat(4000);
+    const { status } = await api("PUT", "/api/character", {
+      callerId: "admin1",
+      body: { text },
+    });
+    expect(status).toBe(200);
+    expect(db.getProjectConfig("character")).toBe(text);
+  });
+});
+
+describe("DELETE /api/character", () => {
+  test("global admin clears character", async () => {
+    db.setProjectConfig("character", "Be formal", "admin1");
+    const { status, data } = await api("DELETE", "/api/character", {
+      callerId: "admin1",
+    });
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(db.getProjectConfig("character")).toBeNull();
+  });
+
+  test("non-admin gets 403", async () => {
+    db.setProjectConfig("character", "Be formal", "admin1");
+    const { status } = await api("DELETE", "/api/character", {
+      callerId: "member1",
+    });
+    expect(status).toBe(403);
+    expect(db.getProjectConfig("character")).toBe("Be formal");
+  });
+});

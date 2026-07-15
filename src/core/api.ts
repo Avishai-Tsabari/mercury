@@ -6,6 +6,7 @@ import { resolveRole } from "./permissions.js";
 import {
   broadcast,
   capability,
+  character,
   config,
   connections,
   control,
@@ -113,6 +114,7 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
   app.route("/tts", tts);
   app.route("/capability", capability);
   app.route("/broadcast", broadcast);
+  app.route("/character", character);
 
   // ─── Fallback ───────────────────────────────────────────────────────────
 

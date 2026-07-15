@@ -1301,6 +1301,19 @@ export class MercuryCoreRuntime {
         };
       }
 
+      // Inject global character (owner-set voice, deploy-safe, global-admin gated).
+      const characterPrompt = this.db.getProjectConfig("character");
+      if (characterPrompt) {
+        const existing = extraEnv?.MERCURY_EXT_SYSTEM_PROMPT;
+        const block = `## Bot Character (set by the owner — applies to all conversations)\n${characterPrompt}`;
+        extraEnv = {
+          ...extraEnv,
+          MERCURY_EXT_SYSTEM_PROMPT: existing
+            ? `${existing}\n\n${block}`
+            : block,
+        };
+      }
+
       // Inject per-space system prompt (set via console Spaces settings or at provision time).
       const spacePrompt = this.db.getSpaceConfig(spaceId, "system_prompt");
       if (spacePrompt) {

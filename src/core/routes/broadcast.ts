@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { logger } from "../../logger.js";
 import { type Env, getApiCtx, getAuth } from "../api-types.js";
+import { isGlobalAdmin } from "../global-admin.js";
 
 export const broadcast = new Hono<Env>();
 
@@ -12,34 +13,7 @@ broadcast.post("/", async (c) => {
     return c.json({ error: "dm_auto_space is not enabled" }, 503);
   }
 
-  const globalAdmins = [
-    ...(config.admins
-      ? config.admins
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : []),
-    ...(config.dmAutoSpaceAdminIds
-      ? config.dmAutoSpaceAdminIds
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : []),
-  ];
-
-  const normalize = (s: string) =>
-    s
-      .replace(/^[^:]+:/, "")
-      .replace(/^[+]+/, "")
-      .replace(/@.*$/, "");
-
-  const callerNormalized = normalize(callerId);
-
-  const isAdmin = globalAdmins.some(
-    (id) => id === callerId || normalize(id) === callerNormalized,
-  );
-
-  if (!isAdmin) {
+  if (!isGlobalAdmin(callerId, config)) {
     logger.warn("Broadcast denied — caller is not a global admin", {
       callerId,
     });

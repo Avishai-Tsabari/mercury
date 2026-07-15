@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { StorageResponse } from "../core/routes/storage.js";
 import { buildRequestInit } from "./mrctl-http.js";
@@ -96,6 +96,7 @@ Built-in commands:
   mrctl compact
   mrctl clear
   mrctl recall <search text> [--limit N]
+  mrctl character get|set|clear
   mrctl capability <name> <action> [json-body]
   mrctl tts synthesize --text "Hello" --out outbox/reply.mp3 \\
       [--language auto|he-IL|en-US] [--provider google|azure|auto]
@@ -130,6 +131,46 @@ async function main() {
   switch (cmd) {
     case "whoami": {
       print(await api("GET", "/api/whoami"));
+      break;
+    }
+
+    case "character": {
+      if (!sub) usage();
+      switch (sub) {
+        case "get": {
+          const data = (await api("GET", "/api/character")) as {
+            character: string | null;
+          };
+          if (data.character === null) {
+            process.stdout.write("(not set)\n");
+          } else {
+            process.stdout.write(`${data.character}\n`);
+          }
+          break;
+        }
+        case "set": {
+          const filePath = parseFlag(args, "--file");
+          let text: string;
+          if (filePath) {
+            text = readFileSync(filePath, "utf-8");
+          } else {
+            const fileIdx = args.indexOf("--file");
+            const words = args.slice(2).filter((_, i) => {
+              const absIdx = i + 2;
+              return absIdx !== fileIdx && absIdx !== fileIdx + 1;
+            });
+            if (words.length === 0) fatal("Missing text or --file <path>");
+            text = words.join(" ");
+          }
+          print(await api("PUT", "/api/character", { text }));
+          break;
+        }
+        case "clear":
+          print(await api("DELETE", "/api/character"));
+          break;
+        default:
+          fatal(`Unknown character subcommand: ${sub}`);
+      }
       break;
     }
 

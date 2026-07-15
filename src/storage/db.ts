@@ -206,6 +206,14 @@ export class Db {
         updated_at INTEGER NOT NULL,
         PRIMARY KEY (space_id, platform_user_id, date)
       );
+
+      CREATE TABLE IF NOT EXISTS project_config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
     this.ensureMessagesRunMetaColumn();
     this.ensureChatStateClearBoundaryColumn();
@@ -1324,6 +1332,41 @@ export class Db {
     const res = this.db
       .query("DELETE FROM space_config WHERE space_id = ? AND key = ?")
       .run(spaceId, key);
+    return res.changes > 0;
+  }
+
+  // --- Project Config (global, not tied to any space) ---
+
+  getProjectConfig(key: string): string | null {
+    const row = this.db
+      .query("SELECT value FROM project_config WHERE key = ?")
+      .get(key) as { value: string } | null;
+    return row?.value ?? null;
+  }
+
+  getProjectConfigUpdatedBy(key: string): string | null {
+    const row = this.db
+      .query("SELECT updated_by FROM project_config WHERE key = ?")
+      .get(key) as { updated_by: string } | null;
+    return row?.updated_by ?? null;
+  }
+
+  setProjectConfig(key: string, value: string, updatedBy: string): void {
+    const now = Date.now();
+    this.db
+      .query(
+        `INSERT INTO project_config(key, value, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(key)
+         DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+      )
+      .run(key, value, updatedBy, now, now);
+  }
+
+  deleteProjectConfig(key: string): boolean {
+    const res = this.db
+      .query("DELETE FROM project_config WHERE key = ?")
+      .run(key);
     return res.changes > 0;
   }
 

@@ -460,6 +460,30 @@ curl -X POST http://localhost:8787/api/broadcast \
 
 Returns `{ total, delivered, failed, errors }`. Only global admins (`admins` or `dm_auto_space.admin_ids`) may broadcast. Messages are sent as literal text — no LLM processing.
 
+#### Bot Character
+
+Global admins can set a bot-wide character (tone, greeting style, personality) that applies to all spaces — including every DM auto-space. Stored in the database; survives profile deploys.
+
+The recommended flow is conversational: tell the bot to change its character, it drafts the update, confirms with you, then saves via `mrctl character set --file <path>`. Programmatic access:
+
+```bash
+# Set
+curl -X PUT http://localhost:8787/api/character \
+  -H "Authorization: Bearer $API_SECRET" \
+  -H "X-Mercury-Caller: <admin-id>" \
+  -H "X-Mercury-Space: main" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Be warm and professional. Greet with שלום וברכה."}'
+
+# Get current character
+curl http://localhost:8787/api/character ...
+
+# Clear
+curl -X DELETE http://localhost:8787/api/character ...
+```
+
+Only global admins may set the character (same gate as broadcast). Per-space tone adjustments use the existing per-space `system_prompt` in dashboard settings.
+
 ### Per-space Config
 
 Conversations are discovered from incoming traffic. Unlinked conversations stay idle until you attach them to a space via `mercury link <conversation-id> <space-id>` or the dashboard.

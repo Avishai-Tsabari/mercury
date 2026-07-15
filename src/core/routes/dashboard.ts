@@ -1030,6 +1030,14 @@ export function createDashboardRoutes(ctx: DashboardContext) {
         </div>
       </div>
 
+      ${raw(
+        (() => {
+          const charText = core.db.getProjectConfig("character");
+          if (!charText) return "";
+          return `<div class="panel"><div class="panel-header">Bot Character</div><div class="panel-body"><pre style="white-space:pre-wrap;word-break:break-word;margin:0;font-family:inherit;font-size:13px;color:var(--fg-muted)">${escapeHtml(charText)}</pre></div></div>`;
+        })(),
+      )}
+
       ${raw(renderExtensionWidgets())}
     `);
   });

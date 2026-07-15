@@ -45,15 +45,31 @@ Every request runs with `--no-session` (no pi session file). Continuity across r
 
 The session boundary (`chat_state.min_message_id`) excludes messages older than the last `compact` call from the sliding window. Run `mrctl compact` to reset the boundary and start fresh.
 
-### Prompt structure (inside container)
+### System prompt layering (broadest → most specific)
 
 ```
-<system>
-  [identity: AGENTS.md + capabilities + memory guidance]
-</system>
+1. pi built-in prompt (Claude Code identity, tool definitions)
+   — or Mercury's override when OVERRIDE_PI_SYSTEM_PROMPT is set
 
-<caller>…</caller>
+2. Mercury platform additions (buildMercuryAdditions)
+   — identity, inbox/outbox, permissions, moderation, capabilities, memory guidance
+
+3. MERCURY_EXT_SYSTEM_PROMPT (assembled on host, passed as env var):
+   a. Extension before_container fragments
+   b. profile_prompt           (capability playbook — deploy-owned)
+   c. Bot Character            (global voice — owner-owned, via project_config DB)
+   d. Per-space system_prompt  (space refinement — space-admin-owned)
+
+4. AGENTS.md files (pi auto-discovers from PI_CODING_AGENT_DIR + workspace cwd)
+   — global (:ro) + per-space
+```
+
+### User prompt structure (inside container)
+
+```
+<caller id="…" name="…" role="…" space="…" />
 <episodic_memory>…</episodic_memory>   ← MEMORY.md (if present)
+<active_episodes>…</active_episodes>   ← relevance-scored episode snippets
 <history>                               ← sliding window from DB
   <turn timestamp="…">
     <user>…</user>
@@ -64,6 +80,7 @@ The session boundary (`chat_state.min_message_id`) excludes messages older than 
 <ambient_messages>…</ambient_messages>
 <preferences>…</preferences>
 <attachments>…</attachments>
+<reply_anchor>…</reply_anchor>          ← only on replies
 
 [user prompt text]
 ```
