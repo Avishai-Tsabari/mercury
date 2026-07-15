@@ -32,7 +32,7 @@ function logTiming(
   process.stderr.write(`${JSON.stringify({ event, ...data })}\n`);
 }
 
-type Payload = {
+export type Payload = {
   spaceId: string;
   spaceWorkspace: string;
   messages: StoredMessage[];
@@ -269,7 +269,7 @@ function buildCapabilitySection(
  * wrapper in buildSystemPrompt provides the identity. Bot identity (from BOT_USERNAME env) and all
  * platform content (inbox/outbox, docs reference, permissions, moderation) are retained.
  */
-function buildMercuryAdditions(
+export function buildMercuryAdditions(
   caps: ModelCapabilities,
   payload: Payload,
   opts: { skipIdentity?: boolean } = {},
@@ -297,6 +297,55 @@ Never write or execute scripts whose purpose is to read data from the local file
 ## Moderation
 You can mute users who are being abusive, spamming, trying to exfiltrate secrets, or deliberately wasting the group's resources by triggering you for pointless nonsense. Use \`mrctl mute\` when you judge it necessary — you don't need to wait for an admin to ask. Warn the user first, then mute if they continue.`;
 
+  const destructiveOps = `## Destructive Operations — Confirmation Required
+
+Before deleting, trashing, or permanently removing any data, you MUST stop and confirm with the user first:
+
+1. **List exactly what will be affected** — names, count, and location
+2. **Ask explicitly** — e.g. "This will permanently delete 12 files from your Google Drive. Reply YES to confirm."
+3. **Wait for an unambiguous "yes"** — do not proceed until you have it
+
+This applies to **all personal data**, regardless of where it lives:
+- Connected accounts: Google Drive, Gmail, Google Photos, Yahoo Mail, and any other connected service
+- Filesystem: any \`rm\`, \`rmdir\`, file deletion, or bulk removal from the user's files
+
+**Always prefer the reversible option** — move to trash instead of permanent delete, archive instead of delete, move to a folder instead of remove. If the user hasn't explicitly asked for permanent deletion, choose the reversible path by default.
+
+**Exception**: temp files the agent created during the current task (e.g., scratch files in \`/tmp\`) may be cleaned up without confirmation.
+
+This rule applies even when the request implies deletion (e.g., "clean up", "organize", "clear out", "remove duplicates"). When in doubt, ask.`;
+
+  const toolResultPresentation = `## Presenting tool results
+
+After running any command or tool, never send raw output to the user. Always translate into plain conversational language before responding.
+
+- **Names only** — show the human-readable name; never show file IDs, message IDs, or thread IDs
+- **Plain types** — say "Google Doc", "spreadsheet", "folder", "PDF"; never show MIME type strings
+- **Simple lists** — numbered or bulleted with name + one-word type hint; no tables of raw fields
+- **Errors** — explain what went wrong in plain terms; never show exit codes, stack traces, or raw error strings
+- **Never show** — JSON blobs, bash code blocks, command flags, or API parameter objects in replies
+
+This rule applies to all tools: Google Workspace, TradeStation, web search, and any future extension.`;
+
+  const characterChangeFlow = `## Character
+
+The system prompt may include a "Bot Character" section — the owner-defined voice for
+all conversations. Always follow it.
+
+When a user asks you to change your personality, tone, greeting style, or character:
+1. Read the current character: \`mrctl character get\`
+2. Draft the FULL updated character text — merge their request with the existing
+   character into one coherent text. Do not append contradictory fragments.
+3. Show the draft and ask for explicit confirmation.
+4. On confirmation, write the draft to a temp file and run:
+   \`mrctl character set --file <path>\`
+5. Relay the result. If the API returns 403, tell the user that only the bot owner
+   can change the global character.
+
+Only global admins (configured on the host) can change the character — the API
+enforces this. Per-space tone adjustments go in this space's \`system_prompt\`,
+which is set from the dashboard (Spaces settings).`;
+
   const memory = `## Memory
 Your workspace may contain a \`MEMORY.md\` file with a summary of past interactions and important context for this space. If it exists, use it to stay consistent with prior decisions. You may update \`MEMORY.md\` when significant events happen, new patterns emerge, or when asked to remember something. Keep it concise (~1500 tokens max). Use \`mrctl recall\` to search older message history when you need details that are not in the current context.
 
@@ -309,6 +358,9 @@ Your prompt may include \`<active_episodes>\` XML with time-bounded topics relev
   parts.push(mercuryPlatform);
   parts.push(buildCapabilitySection(caps, payload));
   parts.push(memory);
+  parts.push(destructiveOps);
+  parts.push(toolResultPresentation);
+  parts.push(characterChangeFlow);
   if (payload.anchorMessages && payload.anchorMessages.length > 0) {
     parts.push(
       `When a \`<reply_anchor>\` block appears in the user prompt, the user is swipe-replying to those specific messages. Address the anchor content directly.`,
@@ -1009,19 +1061,24 @@ async function main() {
   process.stdout.write(`\n${END}\n`);
 }
 
-main().catch((error) => {
-  const message = String(error);
-  process.stderr.write(message);
-  // Always publish a failure result so the host's poll loop unwinds immediately
-  // instead of waiting out the full container timeout on a caught error.
-  const ioDir = process.env.IO_DIR;
-  if (ioDir) {
-    try {
-      writeResultFile(ioDir, { ok: false, error: message });
-    } catch {
-      // If we can't even write the failure, the host's liveness probe will
-      // detect the exited container and surface a crash error.
+// Guard so importing this module (e.g. from tests) doesn't start the container
+// loop. Inside the container the file is always the bun entrypoint, so
+// import.meta.main is true there.
+if (import.meta.main) {
+  main().catch((error) => {
+    const message = String(error);
+    process.stderr.write(message);
+    // Always publish a failure result so the host's poll loop unwinds immediately
+    // instead of waiting out the full container timeout on a caught error.
+    const ioDir = process.env.IO_DIR;
+    if (ioDir) {
+      try {
+        writeResultFile(ioDir, { ok: false, error: message });
+      } catch {
+        // If we can't even write the failure, the host's liveness probe will
+        // detect the exited container and surface a crash error.
+      }
     }
-  }
-  process.exit(1);
-});
+    process.exit(1);
+  });
+}
