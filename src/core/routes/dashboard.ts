@@ -692,12 +692,17 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     const defL = reg.get(VT_KEY.local_engine)?.default ?? "transformers";
     const defM = reg.get(VT_KEY.model)?.default ?? "";
 
-    const effProvider =
-      core.db.getSpaceConfig(spaceId, VT_KEY.provider)?.trim() ?? defP;
-    const effLocalEngine =
-      core.db.getSpaceConfig(spaceId, VT_KEY.local_engine)?.trim() ?? defL;
-    const effModel =
-      core.db.getSpaceConfig(spaceId, VT_KEY.model)?.trim() ?? defM;
+    // Match the extension's own resolution (space → @global → yaml → default)
+    // so "Effective" shows what transcription will actually use.
+    const resolveEff = (key: string, def: string) =>
+      (extensionCtx
+        ? extensionCtx.getConfig(spaceId, key)
+        : core.db.getSpaceConfig(spaceId, key)
+      )?.trim() || def;
+
+    const effProvider = resolveEff(VT_KEY.provider, defP);
+    const effLocalEngine = resolveEff(VT_KEY.local_engine, defL);
+    const effModel = resolveEff(VT_KEY.model, defM);
 
     const matched = VOICE_TRANSCRIBE_PRESETS.find(
       (p) =>

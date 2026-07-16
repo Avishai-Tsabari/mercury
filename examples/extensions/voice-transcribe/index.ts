@@ -369,7 +369,7 @@ export default function (mercury: {
   mercury.env({ from: "MERCURY_STT_GEMINI_API_KEY", hostOnly: true });
   mercury.config("provider", {
     description:
-      '"local" = Python+transformers on Mercury host (see skill); "api" = Hugging Face Inference API (MERCURY_HF_TOKEN); "openai" = OpenAI-compatible /audio/transcriptions incl. Groq (MERCURY_STT_API_KEY, see base_url); "gemini" = Google Gemini audio (MERCURY_GEMINI_API_KEY)',
+      '"local" = Python+transformers on Mercury host (see skill); "api" = Hugging Face Inference API (MERCURY_HF_TOKEN); "openai" = OpenAI-compatible /audio/transcriptions incl. Groq (MERCURY_STT_API_KEY, see base_url); "gemini" = Google Gemini audio (MERCURY_STT_GEMINI_API_KEY)',
     default: DEFAULT_PROVIDER,
     validate: (v) => (PROVIDERS as readonly string[]).includes(v),
   });
