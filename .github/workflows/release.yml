@@ -50,7 +50,7 @@ jobs:
       # No registry-url: setup-node's registry-url writes an .npmrc with a
       # _authToken line that hijacks auth and blocks OIDC. Trusted publishing
       # only engages when no token is configured.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
