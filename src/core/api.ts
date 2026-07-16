@@ -18,6 +18,7 @@ import {
   permissions,
   prefs,
   roles,
+  send,
   spaces,
   tasks,
   tradestation,
@@ -114,6 +115,7 @@ export function createApiApp(apiCtx: ApiContext): Hono<Env> {
   app.route("/tts", tts);
   app.route("/capability", capability);
   app.route("/broadcast", broadcast);
+  app.route("/send", send);
   app.route("/character", character);
 
   // ─── Fallback ───────────────────────────────────────────────────────────

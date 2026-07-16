@@ -266,8 +266,37 @@ interface MercuryExtensionContext {
   readonly config: AppConfig; // Mercury configuration
   readonly log: Logger;      // Logger scoped to the extension
   hasCallerPermission(spaceId: string, callerId: string, permission: string): boolean;
+  getConfig(spaceId: string, key: string): string | null;
+  send(opts: { to: string; text: string }): Promise<{ spaceId: string }>;
 }
 ```
+
+### `ctx.send(opts)` — deterministic direct send
+
+Delivers a message straight to the adapter outbox — no agent run, no LLM in the path. Use it from jobs and capability handlers when the message text must arrive exactly as composed (reminders, notifications):
+
+```typescript
+mercury.job("appointment-reminders", {
+  cron: "*/15 * * * *",
+  run: async (ctx) => {
+    for (const r of dueReminders(ctx)) {
+      try {
+        await ctx.send({ to: r.callerId, text: r.text });
+      } catch (err) {
+        ctx.log.warn("reminder send failed — retrying next sweep", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  },
+});
+```
+
+`to` resolves callerId-first: an exact space id, a raw WhatsApp caller id (phone JID or opaque LID — same normalization that keys DM auto-spaces), a platform-qualified id (`whatsapp:123@lid`), or a phone with leading `+`. It never creates spaces — sending to someone without an existing conversation fails.
+
+Failures throw `DirectSendError` with a `reason` you can branch on: `sender_not_ready` (adapters not up yet, or the context has no delivery path — e.g. connection status probes), `unknown_recipient` (no existing space matches), `invalid_text` (empty or over 4096 chars).
+
+The same delivery path is exposed to ops scripts as `POST /api/send` (Bearer `MERCURY_API_SECRET`, global-admin caller, body `{ "recipient": "...", "text": "..." }`). Like `/api/broadcast`, it is host-side only — never member-callable from containers.
 
 ## Container Integration
 

@@ -31,7 +31,7 @@ capability.post("/:name/:action", async (c) => {
   const name = c.req.param("name");
   const action = c.req.param("action");
   const { callerId, spaceId } = getAuth(c);
-  const { db, config, registry, configRegistry } = getApiCtx(c);
+  const { db, config, registry, configRegistry, runtime } = getApiCtx(c);
 
   logger.info("Capability request", {
     capability: name,
@@ -57,6 +57,9 @@ capability.post("/:name/:action", async (c) => {
     config,
     log: logger,
     configRegistry,
+    sendDirect: runtime
+      ? (recipient, text) => runtime.sendDirect(recipient, text)
+      : undefined,
   });
 
   try {

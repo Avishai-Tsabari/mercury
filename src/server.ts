@@ -161,6 +161,7 @@ export function createApp(ctx: ServerContext): Hono {
       config,
       log: logger,
       configRegistry: ctx.configRegistry,
+      sendDirect: (recipient, text) => core.sendDirect(recipient, text),
     }),
     projectRoot,
     packageRoot,

@@ -438,6 +438,7 @@ async function main() {
       config,
       log: logger,
       configRegistry,
+      sendDirect: (recipient, text) => core.sendDirect(recipient, text),
     }),
   );
   core.onShutdown(() => jobRunner.stop());
