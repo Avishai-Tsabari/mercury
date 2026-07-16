@@ -83,6 +83,16 @@
 #   default_system_prompt: ""                   # seeded into auto-created user spaces
 #   default_member_permissions: "prompt,prefs.get"  # restrict users to chat only
 
+# ─── Extension config defaults ──────────────────────────────────────────────
+# Deployment-wide defaults for extension config keys, applied to every space
+# (incl. auto-created DM spaces) unless overridden per-space or in the
+# dashboard's global scope. See docs/configuration.md.
+# extensions:
+#   voice-transcribe:
+#     provider: openai            # local | api | openai | gemini
+#     model: gpt-4o-mini-transcribe
+#     language: he
+
 # ─── Applicative profile ────────────────────────────────────────────────────
 # A profile wraps raw capabilities with deterministic business logic and scopes
 # what members may do. Apply one with `mercury profile apply <name|path|git-url>`

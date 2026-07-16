@@ -270,6 +270,15 @@ const schema = z.object({
   dmAutoSpaceAdminIds: z.string().default(""),
   dmAutoSpaceDefaultSystemPrompt: z.string().default(""),
   dmAutoSpaceDefaultMemberPermissions: z.string().default("prompt,prefs.get"),
+
+  // ─── Extension config defaults ─────────────────────────────────────
+  /**
+   * JSON object of flat extension config defaults, e.g.
+   * `{"voice-transcribe.provider":"openai"}`. Populated from the
+   * `extensions:` section of mercury.yaml (or MERCURY_EXTENSION_DEFAULTS).
+   * Sits between the `@global` DB scope and registered code defaults.
+   */
+  extensionDefaults: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof schema> & {
@@ -286,7 +295,41 @@ export type AppConfig = z.infer<typeof schema> & {
   resolvedModelChainCapabilities: ModelCapabilities[];
   /** Effective budget after clamping to container timeout. */
   effectiveModelChainBudgetMs: number;
+  /** Parsed `extensionDefaults` JSON: flat "ext.key" → value map. */
+  parsedExtensionDefaults: Record<string, string>;
 };
+
+function parseExtensionDefaults(
+  raw: string | undefined,
+): Record<string, string> {
+  if (!raw?.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return {};
+    }
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      ) {
+        out[key] = String(value);
+      }
+    }
+    return out;
+  } catch {
+    console.warn(
+      "[WARN] MERCURY_EXTENSION_DEFAULTS / mercury.yaml extensions section is not valid JSON — ignored",
+    );
+    return {};
+  }
+}
 
 export function loadConfig(): AppConfig {
   const raw = mergeRawMercuryConfig(process.env);
@@ -330,6 +373,7 @@ export function loadConfig(): AppConfig {
     parsedModelCapabilitiesEnv,
     resolvedModelChainCapabilities,
     effectiveModelChainBudgetMs,
+    parsedExtensionDefaults: parseExtensionDefaults(base.extensionDefaults),
   };
 }
 

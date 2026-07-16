@@ -237,7 +237,7 @@ async function main() {
   );
 
   // Wire extensions into runtime (hooks, context)
-  core.initExtensions(registry);
+  core.initExtensions(registry, configRegistry);
 
   // Install skills (extension + built-in)
   installExtensionSkills(
@@ -433,7 +433,12 @@ async function main() {
   const jobRunner = new JobRunner();
   jobRunner.start(
     registry.list(),
-    createMercuryExtensionContext({ db: core.db, config, log: logger }),
+    createMercuryExtensionContext({
+      db: core.db,
+      config,
+      log: logger,
+      configRegistry,
+    }),
   );
   core.onShutdown(() => jobRunner.stop());
 

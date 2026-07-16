@@ -5,6 +5,7 @@ import {
   friendlyErrorMessage,
 } from "../agent/user-error-messages.js";
 import { type AppConfig, resolveProjectPath } from "../config.js";
+import type { ConfigRegistry } from "../extensions/config-registry.js";
 import { createMercuryExtensionContext } from "../extensions/context.js";
 import { HookDispatcher } from "../extensions/hooks.js";
 import type { ExtensionRegistry } from "../extensions/loader.js";
@@ -135,13 +136,17 @@ export class MercuryCoreRuntime {
    * Wire extension system into the runtime.
    * Must be called after extensions are loaded and before accepting messages.
    */
-  initExtensions(registry: ExtensionRegistry): void {
+  initExtensions(
+    registry: ExtensionRegistry,
+    configRegistry?: ConfigRegistry,
+  ): void {
     this.hooks = new HookDispatcher(registry, logger);
     this.extensionRegistry = registry;
     this.extensionCtx = createMercuryExtensionContext({
       db: this.db,
       config: this.config,
       log: logger,
+      configRegistry,
     });
     this.warnUncoveredSensitiveSpaces();
   }
@@ -1458,6 +1463,7 @@ export class MercuryCoreRuntime {
           )
             continue;
           for (const envDef of ext.envVars) {
+            if (envDef.hostOnly) continue;
             const value = process.env[envDef.from];
             if (value) {
               const containerKey =

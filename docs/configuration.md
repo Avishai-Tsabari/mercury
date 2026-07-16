@@ -41,6 +41,21 @@ Per-space overrides via `mrctl config set context.<key> <value>` always win over
 
 You may also set a top-level **`model_chain`** array as an alias for `model.chain`.
 
+## Extension config defaults (`extensions:`)
+
+Deployment-wide defaults for extension config keys, applied to **every space** (including auto-created DM spaces) at read time:
+
+```yaml
+extensions:
+  voice-transcribe:
+    provider: openai
+    model: whisper-large-v3
+    base_url: https://api.groq.com/openai/v1
+    language: he
+```
+
+Resolution order for an extension config key: per-space value (`mrctl config set`) → `@global` scope (set from the dashboard **Features** page) → this YAML section (env: `MERCURY_EXTENSION_DEFAULTS` as flat JSON, e.g. `{"voice-transcribe.provider":"openai"}`) → the extension's registered default. Changing a global or YAML value takes effect for all existing and future spaces immediately (YAML on restart) — nothing is copied into per-space rows.
+
 ## Model chain
 
 In YAML, use a list of `{ provider, model }` objects under `model.chain` (max 4 legs). The same rules apply as for `MERCURY_MODEL_CHAIN` JSON.

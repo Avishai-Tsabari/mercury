@@ -160,6 +160,7 @@ export function createApp(ctx: ServerContext): Hono {
       db: core.db,
       config,
       log: logger,
+      configRegistry: ctx.configRegistry,
     }),
     projectRoot,
     packageRoot,

@@ -64,6 +64,8 @@ Manage API keys for supported model providers (Anthropic, OpenAI, Google Gemini,
 
 Extension management through the UI. Shows installed extensions with their capabilities (CLI / skill / widget) and a remove button. Lists available catalog extensions with a one-click install button. Installing or removing an extension triggers a container image rebuild and restart.
 
+Also hosts the **Global config defaults** panel: set deployment-wide values for any registered extension config key (the `@global` scope). These apply to every space — including auto-created DM spaces — unless a space overrides them, and win over the `extensions:` section in `mercury.yaml`. See [configuration.md](configuration.md#extension-config-defaults-extensions).
+
 ## Real-time Updates
 
 The dashboard uses Server-Sent Events (SSE) for live updates:

@@ -1,19 +1,23 @@
 ---
 name: voice-transcribe
-description: Voice notes are transcribed to text before the agent runs (local Python or Hugging Face Inference API).
+description: Voice notes are transcribed to text before the agent runs (local Python, OpenAI-compatible cloud, Gemini, or Hugging Face Inference API).
 ---
 
 # Voice transcription
 
 When a user sends a **voice note** or **audio** attachment, Mercury runs the `voice-transcribe` extension **before** the container starts. The transcript is appended to the user message as a `[Voice transcript]` block. You receive normal text — you do not need to read or play audio files for intent.
 
-## Configuration (per space)
+## Configuration
+
+Keys resolve per space, then fall back to deployment-wide defaults (`@global` scope set from the dashboard Features page, or the `extensions:` section of `mercury.yaml`), then to the extension defaults.
 
 | Key | Purpose |
 |-----|---------|
-| `voice-transcribe.provider` | `local` (default) or `api` |
-| `voice-transcribe.model` | Hugging Face model id (see below) |
+| `voice-transcribe.provider` | `local` (default), `openai`, `gemini`, or `api` |
+| `voice-transcribe.model` | Model id for the chosen provider (see below) |
 | `voice-transcribe.local_engine` | Local only: `transformers` (default) or `faster_whisper` (CTranslate2 Hub repos) |
+| `voice-transcribe.base_url` | `openai` only: API root (default `https://api.openai.com/v1`; Groq: `https://api.groq.com/openai/v1`) |
+| `voice-transcribe.language` | Cloud providers: ISO-639-1 hint (e.g. `he`). Improves accuracy on short voice notes |
 
 ### Local provider (`local`)
 
@@ -43,6 +47,20 @@ Runs `scripts/transcribe.py` on the **Mercury host**.
 Hub messages like *Xet Storage… hf_xet* are warnings only, not the cause of failures.
 
 First run downloads the model into the Hugging Face cache (size depends on the model). **Each voice note spawns a new Python process**, so the first transcription after Mercury starts can be slow while the model loads (no in-process reuse yet).
+
+### OpenAI-compatible provider (`openai`)
+
+POSTs audio to `{base_url}/audio/transcriptions` (multipart). Requires `MERCURY_STT_API_KEY` on the host (the key never enters agent containers). Works with:
+
+- **OpenAI** (default `base_url`) — models `gpt-4o-mini-transcribe` (default), `gpt-4o-transcribe`, `whisper-1`
+- **Groq** — set `voice-transcribe.base_url=https://api.groq.com/openai/v1`, model `whisper-large-v3`
+- Any other host implementing the same endpoint
+
+No Python, ffmpeg, or GPU on the host — ideal for small VPS deployments. Set `voice-transcribe.language` (e.g. `he`) for better accuracy on short notes.
+
+### Gemini provider (`gemini`)
+
+Sends audio inline to the Gemini API (`generateContent`) with a transcription instruction. Requires `MERCURY_STT_GEMINI_API_KEY` on the host (a plain API key — no GCP project setup; deliberately separate from the model-chain `MERCURY_GEMINI_API_KEY`, which must keep flowing into containers). Default model `gemini-2.5-flash`. Also host-only, no local dependencies.
 
 ### API provider (`api`)
 

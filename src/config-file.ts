@@ -174,6 +174,21 @@ const mercuryFileSchema = z
       })
       .strip()
       .optional(),
+
+    /**
+     * Per-deployment extension config defaults, keyed by extension name:
+     *   extensions:
+     *     voice-transcribe:
+     *       provider: openai
+     *       language: he
+     * Applies to every space unless overridden per-space or in the @global scope.
+     */
+    extensions: z
+      .record(
+        z.string(),
+        z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+      )
+      .optional(),
   })
   .strip();
 
@@ -196,6 +211,7 @@ const KNOWN_TOP_KEYS = new Set([
   "media",
   "permissions",
   "dm_auto_space",
+  "extensions",
 ]);
 
 const KNOWN_SECTION_KEYS: Record<string, Set<string>> = {
@@ -400,6 +416,18 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
       f.dm_auto_space.default_member_permissions;
   }
 
+  if (f.extensions != null) {
+    const flat: Record<string, string> = {};
+    for (const [ext, keys] of Object.entries(f.extensions)) {
+      for (const [key, value] of Object.entries(keys)) {
+        flat[`${ext}.${key}`] = String(value);
+      }
+    }
+    if (Object.keys(flat).length > 0) {
+      o.extensionDefaults = JSON.stringify(flat);
+    }
+  }
+
   return o;
 }
 
@@ -471,6 +499,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   dmAutoSpaceDefaultSystemPrompt: "MERCURY_DM_AUTO_SPACE_DEFAULT_SYSTEM_PROMPT",
   dmAutoSpaceDefaultMemberPermissions:
     "MERCURY_DM_AUTO_SPACE_DEFAULT_MEMBER_PERMISSIONS",
+  extensionDefaults: "MERCURY_EXTENSION_DEFAULTS",
 };
 
 function envValueForSchema(

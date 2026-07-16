@@ -13,6 +13,16 @@ const DEFAULT_PROVIDER = "local";
 const DEFAULT_LOCAL_ENGINE = "transformers";
 /** Classic HF Inference API (serverless). */
 const HF_INFERENCE_BASE = "https://api-inference.huggingface.co/models";
+/** OpenAI-compatible /audio/transcriptions root; override via base_url for Groq etc. */
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+/** Sensible model when provider=openai and the configured model is not an OpenAI/Groq one. */
+const DEFAULT_OPENAI_MODEL = "gpt-4o-mini-transcribe";
+const GEMINI_API_BASE =
+  "https://generativelanguage.googleapis.com/v1beta/models";
+/** Sensible model when provider=gemini and the configured model is not a Gemini one. */
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const PROVIDERS = ["local", "api", "openai", "gemini"] as const;
+type Provider = (typeof PROVIDERS)[number];
 
 const SCRIPT_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -61,6 +71,95 @@ async function transcribeWithApi(
     throw new Error(`HF inference ${res.status}: ${raw.slice(0, 240)}`);
   }
   return parseTranscriptionJson(raw);
+}
+
+/**
+ * OpenAI-compatible transcription (OpenAI, Groq, or any host implementing
+ * `POST {base}/audio/transcriptions`).
+ */
+async function transcribeWithOpenAi(
+  filePath: string,
+  mimeType: string,
+  modelId: string,
+  baseUrl: string,
+  language: string,
+  token: string,
+): Promise<string> {
+  const body = await readFile(filePath);
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([body], { type: mimeType.split(";")[0].trim() || "audio/ogg" }),
+    path.basename(filePath) || "audio.ogg",
+  );
+  form.append("model", modelId);
+  form.append("response_format", "json");
+  if (language) form.append("language", language);
+
+  const url = `${baseUrl.replace(/\/+$/, "")}/audio/transcriptions`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`OpenAI-compatible STT ${res.status}: ${raw.slice(0, 240)}`);
+  }
+  return parseTranscriptionJson(raw);
+}
+
+/** Gemini audio understanding via generateContent (API key, no GCP project). */
+async function transcribeWithGemini(
+  filePath: string,
+  mimeType: string,
+  modelId: string,
+  language: string,
+  apiKey: string,
+): Promise<string> {
+  const body = await readFile(filePath);
+  const langHint = language ? ` The audio language is "${language}".` : "";
+  const url = `${GEMINI_API_BASE}/${encodeURIComponent(modelId)}:generateContent`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: `Transcribe this audio verbatim.${langHint} Output only the transcript text, nothing else.`,
+            },
+            {
+              inline_data: {
+                mime_type: mimeType.split(";")[0].trim() || "audio/ogg",
+                data: body.toString("base64"),
+              },
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`Gemini STT ${res.status}: ${raw.slice(0, 240)}`);
+  }
+  try {
+    const data = JSON.parse(raw) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    return parts
+      .map((p) => p.text ?? "")
+      .join("")
+      .trim();
+  } catch {
+    return "";
+  }
 }
 
 function parseLastJsonLine(stdout: string): {
@@ -207,9 +306,33 @@ function localTimeoutMs(): number {
   return 300_000;
 }
 
+type HookCtx = {
+  db: { getSpaceConfig: (spaceId: string, key: string) => string | null };
+  log: {
+    info: (msg: string, extra?: unknown) => void;
+    warn: (msg: string, extra?: unknown) => void;
+    error: (msg: string, extra?: unknown) => void;
+  };
+  hasCallerPermission: (
+    spaceId: string,
+    callerId: string,
+    permission: string,
+  ) => boolean;
+  /** Host-resolved config (space → @global → mercury.yaml → default). Optional for older hosts. */
+  getConfig?: (spaceId: string, key: string) => string | null;
+};
+
+/** Resolve a config value via ctx.getConfig when the host supports it. */
+function readConfig(ctx: HookCtx, spaceId: string, key: string): string {
+  const resolved = ctx.getConfig
+    ? ctx.getConfig(spaceId, `${EXT}.${key}`)
+    : ctx.db.getSpaceConfig(spaceId, `${EXT}.${key}`);
+  return resolved?.trim() ?? "";
+}
+
 export default function (mercury: {
   permission(opts: { defaultRoles: string[] }): void;
-  env(def: { from: string }): void;
+  env(def: { from: string; hostOnly?: boolean }): void;
   config(
     key: string,
     def: {
@@ -230,33 +353,29 @@ export default function (mercury: {
         containerWorkspace: string;
         attachments?: Attachment[];
       },
-      ctx: {
-        db: { getSpaceConfig: (spaceId: string, key: string) => string | null };
-        log: {
-          info: (msg: string, extra?: unknown) => void;
-          warn: (msg: string, extra?: unknown) => void;
-          error: (msg: string, extra?: unknown) => void;
-        };
-        hasCallerPermission: (
-          spaceId: string,
-          callerId: string,
-          permission: string,
-        ) => boolean;
-      },
+      ctx: HookCtx,
     ) => Promise<{ promptAppend?: string } | undefined>,
   ): void;
 }) {
   mercury.permission({ defaultRoles: ["admin", "member"] });
-  mercury.env({ from: "MERCURY_HF_TOKEN" });
+  // All STT keys are consumed host-side in before_container — never inject
+  // them into agent containers (customers in DM auto-spaces hold the
+  // voice-transcribe permission).
+  mercury.env({ from: "MERCURY_HF_TOKEN", hostOnly: true });
+  // NOTE: MERCURY_GEMINI_API_KEY (model-chain key) is intentionally not
+  // reused — claiming it hostOnly would strip GEMINI_API_KEY from containers
+  // whose model chain runs on Gemini.
+  mercury.env({ from: "MERCURY_STT_API_KEY", hostOnly: true });
+  mercury.env({ from: "MERCURY_STT_GEMINI_API_KEY", hostOnly: true });
   mercury.config("provider", {
     description:
-      '"local" = Python+transformers on Mercury host (see skill); "api" = Hugging Face Inference API (needs MERCURY_HF_TOKEN)',
+      '"local" = Python+transformers on Mercury host (see skill); "api" = Hugging Face Inference API (MERCURY_HF_TOKEN); "openai" = OpenAI-compatible /audio/transcriptions incl. Groq (MERCURY_STT_API_KEY, see base_url); "gemini" = Google Gemini audio (MERCURY_GEMINI_API_KEY)',
     default: DEFAULT_PROVIDER,
-    validate: (v) => v === "local" || v === "api",
+    validate: (v) => (PROVIDERS as readonly string[]).includes(v),
   });
   mercury.config("model", {
     description:
-      "Hugging Face model id (e.g. mike249/whisper-tiny-he-2 for local Hebrew; openai/whisper-large-v3 for api)",
+      "Model id per provider: HF id for local/api (e.g. mike249/whisper-tiny-he-2), e.g. gpt-4o-mini-transcribe or whisper-large-v3 for openai, gemini-2.5-flash for gemini",
     default: DEFAULT_MODEL,
   });
   mercury.config("local_engine", {
@@ -264,6 +383,17 @@ export default function (mercury: {
       'local ASR only: "transformers" (default) or "faster_whisper" (CTranslate2 / Hugging Face CT2 repos, e.g. ivrit-ai/*-ct2)',
     default: DEFAULT_LOCAL_ENGINE,
     validate: (v) => v === "transformers" || v === "faster_whisper",
+  });
+  mercury.config("base_url", {
+    description:
+      "openai provider only: API root implementing /audio/transcriptions (default OpenAI; use https://api.groq.com/openai/v1 for Groq)",
+    default: DEFAULT_OPENAI_BASE_URL,
+    validate: (v) => /^https:\/\//.test(v),
+  });
+  mercury.config("language", {
+    description:
+      'ISO-639-1 hint passed to cloud STT (e.g. "he"). Improves accuracy on short voice notes. Empty = auto-detect.',
+    default: "",
   });
   mercury.skill("./skill");
 
@@ -277,19 +407,21 @@ export default function (mercury: {
     );
     if (!atts?.length) return undefined;
 
-    const provider =
-      ctx.db.getSpaceConfig(event.spaceId, `${EXT}.provider`)?.trim() ||
-      DEFAULT_PROVIDER;
-    const model =
-      ctx.db.getSpaceConfig(event.spaceId, `${EXT}.model`)?.trim() ||
-      DEFAULT_MODEL;
-    const rawLocalEngine = ctx.db
-      .getSpaceConfig(event.spaceId, `${EXT}.local_engine`)
-      ?.trim();
+    const providerRaw = readConfig(ctx, event.spaceId, "provider");
+    const provider: Provider = (PROVIDERS as readonly string[]).includes(
+      providerRaw,
+    )
+      ? (providerRaw as Provider)
+      : DEFAULT_PROVIDER;
+    const model = readConfig(ctx, event.spaceId, "model") || DEFAULT_MODEL;
+    const rawLocalEngine = readConfig(ctx, event.spaceId, "local_engine");
     const localEngine =
       rawLocalEngine === "faster_whisper" || rawLocalEngine === "transformers"
         ? rawLocalEngine
         : DEFAULT_LOCAL_ENGINE;
+    const baseUrl =
+      readConfig(ctx, event.spaceId, "base_url") || DEFAULT_OPENAI_BASE_URL;
+    const language = readConfig(ctx, event.spaceId, "language");
 
     let token: string | undefined;
     if (provider === "api") {
@@ -297,6 +429,24 @@ export default function (mercury: {
       if (!token) {
         ctx.log.warn(
           "MERCURY_HF_TOKEN not set; skipping voice transcription (api provider)",
+          { extension: EXT },
+        );
+        return undefined;
+      }
+    } else if (provider === "openai") {
+      token = process.env.MERCURY_STT_API_KEY?.trim();
+      if (!token) {
+        ctx.log.warn(
+          "MERCURY_STT_API_KEY not set; skipping voice transcription (openai provider)",
+          { extension: EXT },
+        );
+        return undefined;
+      }
+    } else if (provider === "gemini") {
+      token = process.env.MERCURY_STT_GEMINI_API_KEY?.trim();
+      if (!token) {
+        ctx.log.warn(
+          "MERCURY_STT_GEMINI_API_KEY not set; skipping voice transcription (gemini provider)",
           { extension: EXT },
         );
         return undefined;
@@ -311,6 +461,18 @@ export default function (mercury: {
       }
     }
 
+    // The registered `model` default is an HF id for local/api. When the
+    // provider is cloud and the model was never changed from that default,
+    // use a provider-native model instead of sending the HF id upstream.
+    const cloudModel =
+      model !== DEFAULT_MODEL
+        ? model
+        : provider === "openai"
+          ? DEFAULT_OPENAI_MODEL
+          : provider === "gemini"
+            ? DEFAULT_GEMINI_MODEL
+            : model;
+
     const lines: string[] = [];
     const timeoutMs = localTimeoutMs();
     const pythonBin = defaultPython();
@@ -324,6 +486,23 @@ export default function (mercury: {
             hostPath,
             att.mimeType,
             model,
+            token as string,
+          );
+        } else if (provider === "openai") {
+          text = await transcribeWithOpenAi(
+            hostPath,
+            att.mimeType,
+            cloudModel,
+            baseUrl,
+            language,
+            token as string,
+          );
+        } else if (provider === "gemini") {
+          text = await transcribeWithGemini(
+            hostPath,
+            att.mimeType,
+            cloudModel,
+            language,
             token as string,
           );
         } else {

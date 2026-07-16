@@ -132,7 +132,11 @@ Check out this sunset!
 Voice and audio attachments are not playable inside pi. Install the **`voice-transcribe`** extension (see dashboard catalog or `examples/extensions/voice-transcribe/`) to append a text transcript before the agent runs.
 
 - **Default (`voice-transcribe.provider=local`)**: runs Python on the Mercury host; install deps from the extension’s `requirements.txt`. Set `voice-transcribe.local_engine` to `transformers` (default, e.g. [mike249/whisper-tiny-he-2](https://huggingface.co/mike249/whisper-tiny-he-2)) or `faster_whisper` for [CTranslate2](https://github.com/OpenNMT/CTranslate2) models on the Hub (e.g. [ivrit-ai](https://huggingface.co/ivrit-ai) `*-ct2` repos). See the extension skill for `MERCURY_VOICE_FW_COMPUTE_TYPE` and `MERCURY_VOICE_LANGUAGE`.
+- **OpenAI-compatible (`voice-transcribe.provider=openai`)**: cloud `POST /audio/transcriptions` with `MERCURY_STT_API_KEY` (host-only). Works with OpenAI (default) or Groq via `voice-transcribe.base_url=https://api.groq.com/openai/v1`. No Python/GPU on the host — best for small VPS deployments.
+- **Gemini (`voice-transcribe.provider=gemini`)**: Google Gemini audio understanding with `MERCURY_STT_GEMINI_API_KEY` (host-only, plain API key).
 - **API (`voice-transcribe.provider=api`)**: uses the [Hugging Face Inference API](https://huggingface.co/docs/api-inference) with `MERCURY_HF_TOKEN` — choose a model that has a Hub Inference Provider.
+
+Config keys resolve per space with deployment-wide fallbacks — see [Extension config defaults](../configuration.md#extension-config-defaults-extensions) for the `extensions:` YAML section and the dashboard `@global` scope.
 
 ## Future Enhancements
 

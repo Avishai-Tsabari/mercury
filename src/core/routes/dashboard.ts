@@ -9,7 +9,10 @@ import {
   EXTENSION_CATALOG,
   getCatalogEntryByName,
 } from "../../extensions/catalog.js";
-import type { ConfigRegistry } from "../../extensions/config-registry.js";
+import {
+  type ConfigRegistry,
+  GLOBAL_CONFIG_SPACE_ID,
+} from "../../extensions/config-registry.js";
 import {
   installExtensionFromDirectory,
   removeInstalledExtension,
@@ -73,6 +76,20 @@ const VOICE_TRANSCRIBE_PRESETS: VoiceTranscribePreset[] = [
     provider: "api",
     local_engine: "transformers",
     model: "openai/whisper-large-v3",
+  },
+  {
+    id: "openai_4o_mini",
+    label: "GPT-4o mini transcribe (OpenAI cloud)",
+    provider: "openai",
+    local_engine: "transformers",
+    model: "gpt-4o-mini-transcribe",
+  },
+  {
+    id: "gemini_flash",
+    label: "Gemini 2.5 Flash (Google cloud)",
+    provider: "gemini",
+    local_engine: "transformers",
+    model: "gemini-2.5-flash",
   },
 ];
 
@@ -714,12 +731,20 @@ export function createDashboardRoutes(ctx: DashboardContext) {
       selectedPreset === "custom" && effProvider === "local" ? " selected" : "";
     const selApi =
       selectedPreset === "custom" && effProvider === "api" ? " selected" : "";
+    const selOai =
+      selectedPreset === "custom" && effProvider === "openai"
+        ? " selected"
+        : "";
+    const selGem =
+      selectedPreset === "custom" && effProvider === "gemini"
+        ? " selected"
+        : "";
 
     return `
       <div class="panel">
         <div class="panel-header">Voice transcription</div>
         <div class="panel-body">
-          <p class="muted" style="margin-bottom:10px">Per-space STT for <span class="mono">voice-transcribe</span>. API preset requires <span class="mono">MERCURY_HF_TOKEN</span> on the Mercury host.</p>
+          <p class="muted" style="margin-bottom:10px">Per-space STT for <span class="mono">voice-transcribe</span>. Cloud providers need a host key: <span class="mono">MERCURY_STT_API_KEY</span> (openai/Groq), <span class="mono">MERCURY_STT_GEMINI_API_KEY</span> (gemini), or <span class="mono">MERCURY_HF_TOKEN</span> (HF api).</p>
           <div class="role-row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">
             <span class="muted" style="min-width:72px">Effective</span>
             <span style="flex:1;min-width:200px"><span class="mono">${escapeHtml(effModel)}</span> · <span class="mono">${escapeHtml(effLocalEngine)}</span> · <span class="mono">${escapeHtml(effProvider)}</span></span>
@@ -748,7 +773,9 @@ export function createDashboardRoutes(ctx: DashboardContext) {
               <span class="muted" style="font-size:12px">Custom provider</span>
               <select name="custom_provider" class="select">
                 <option value="local"${selLoc}>local</option>
-                <option value="api"${selApi}>api</option>
+                <option value="api"${selApi}>api (HF)</option>
+                <option value="openai"${selOai}>openai</option>
+                <option value="gemini"${selGem}>gemini</option>
               </select>
             </label>
             <button type="submit" name="intent" value="apply" class="btn btn-sm">Save</button>
@@ -1677,6 +1704,72 @@ export function createDashboardRoutes(ctx: DashboardContext) {
 
   // ─── Features (extensions catalog) ───────────────────────────────────────
 
+  function globalConfigPanelHtml(): string {
+    const reg = configRegistry;
+    const cfg = extensionCtx?.config;
+    if (!reg || reg.size === 0 || !cfg) return "";
+
+    const reload = `if(event.detail.successful)htmx.ajax('GET','/dashboard/page/features',{target:'#main',swap:'innerHTML',pushUrl:true})`;
+
+    const rows = reg
+      .getAll()
+      .map((rc) => {
+        const globalValue = core.db.getSpaceConfig(
+          GLOBAL_CONFIG_SPACE_ID,
+          rc.key,
+        );
+        const yamlValue = cfg.parsedExtensionDefaults[rc.key];
+        const effective = globalValue ?? yamlValue ?? rc.default;
+        const source =
+          globalValue !== null
+            ? "global"
+            : yamlValue !== undefined
+              ? "mercury.yaml"
+              : "default";
+        const clearBtn =
+          globalValue !== null
+            ? `<button type="button" class="btn btn-sm btn-danger"
+                hx-delete="/dashboard/api/global-config?key=${encodeURIComponent(rc.key)}"
+                hx-swap="none"
+                hx-on::after-request="${escapeHtml(reload)}"
+                hx-confirm="Clear the global value for ${escapeHtml(rc.key)}?">Clear</button>`
+            : "";
+        return `
+        <tr>
+          <td class="mono" title="${escapeHtml(rc.description)}">${escapeHtml(rc.key)}</td>
+          <td><span class="mono">${escapeHtml(effective)}</span> <span class="muted" style="font-size:12px">(${escapeHtml(source)})</span></td>
+          <td>
+            <form class="role-row" style="gap:6px;margin:0"
+                  hx-post="/dashboard/api/global-config"
+                  hx-swap="none"
+                  hx-on::after-request="${escapeHtml(reload)}">
+              <input type="hidden" name="key" value="${escapeHtml(rc.key)}" />
+              <input type="text" name="value" class="select" style="flex:1;min-width:120px" placeholder="${escapeHtml(rc.default)}" />
+              <button type="submit" class="btn btn-sm">Set</button>
+              ${clearBtn}
+            </form>
+          </td>
+        </tr>`;
+      })
+      .join("");
+
+    return `
+      <div class="panel">
+        <div class="panel-header">Global config defaults</div>
+        <div class="panel-body">
+          <p class="muted" style="margin-bottom:10px">Deployment-wide defaults for extension config. Apply to every space (including auto-created DM spaces) unless a space sets its own value. Precedence: space &gt; global &gt; mercury.yaml &gt; extension default.</p>
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr><th>Key</th><th>Effective</th><th style="min-width:260px">Set global value</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  }
+
   app.get("/page/features", (c) => {
     const cfg = extensionCtx?.config;
     if (!cfg || !registry) {
@@ -1845,6 +1938,8 @@ export function createDashboardRoutes(ctx: DashboardContext) {
           </div>
         </div>
       </div>
+
+      ${raw(globalConfigPanelHtml())}
     `);
   });
 
@@ -2522,6 +2617,46 @@ export function createDashboardRoutes(ctx: DashboardContext) {
     }
 
     core.db.setSpaceConfig(spaceId, key, value, "dashboard");
+    return c.json({ ok: true });
+  });
+
+  app.post("/api/global-config", async (c) => {
+    const reg = configRegistry;
+    if (!reg) {
+      return c.json({ error: "Config registry is not available" }, 400);
+    }
+
+    const form = await c.req.parseBody();
+    const key = typeof form.key === "string" ? form.key.trim() : "";
+    const value = typeof form.value === "string" ? form.value.trim() : "";
+
+    if (!key || !value) {
+      return c.json({ error: "Missing key or value" }, 400);
+    }
+    if (!reg.isValidKey(key)) {
+      return c.json({ error: "Unknown extension config key" }, 400);
+    }
+    if (!reg.validate(key, value)) {
+      return c.json({ error: `Invalid value for ${key}` }, 400);
+    }
+
+    core.db.setSpaceConfig(GLOBAL_CONFIG_SPACE_ID, key, value, "dashboard");
+    return c.json({ ok: true });
+  });
+
+  app.delete("/api/global-config", (c) => {
+    const key = c.req.query("key");
+    if (!key) {
+      return c.json({ error: "Missing key" }, 400);
+    }
+    if (!configRegistry?.isValidKey(key)) {
+      return c.json({ error: "Unknown extension config key" }, 400);
+    }
+
+    const removed = core.db.deleteSpaceConfig(GLOBAL_CONFIG_SPACE_ID, key);
+    if (!removed) {
+      return c.json({ error: "Global value not set" }, 404);
+    }
     return c.json({ ok: true });
   });
 

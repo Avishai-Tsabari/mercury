@@ -33,6 +33,13 @@ export interface MercuryExtensionContext {
     callerId: string,
     permission: string,
   ): boolean;
+  /**
+   * Resolve an extension config value for a space. Resolution order:
+   * per-space value → `@global` scope → mercury.yaml `extensions:` defaults →
+   * registered code default. Returns null only for unregistered keys with no
+   * value set anywhere. Prefer this over `db.getSpaceConfig(...) ?? DEFAULT`.
+   */
+  getConfig(spaceId: string, key: string): string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +284,7 @@ export interface MercuryExtensionAPI {
    * @example
    * mercury.env({ from: "MERCURY_GH_TOKEN" }); // injected as GH_TOKEN
    * mercury.env({ from: "MERCURY_GH_TOKEN", as: "GITHUB_TOKEN" }); // custom name
+   * mercury.env({ from: "MERCURY_STT_API_KEY", hostOnly: true }); // host-side only, never enters containers
    */
   env(def: EnvDef): void;
 
@@ -396,6 +404,13 @@ export interface EnvDef {
   from: string;
   /** Env var name inside the container (e.g. "GH_TOKEN"). Defaults to `from` with MERCURY_ prefix stripped. */
   as?: string;
+  /**
+   * If true, the var is claimed (excluded from the blind MERCURY_* container
+   * passthrough) but never injected into any container. Use for secrets that
+   * only host-side hooks/jobs need — e.g. STT API keys consumed in
+   * `before_container`.
+   */
+  hostOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------

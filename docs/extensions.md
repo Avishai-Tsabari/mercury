@@ -95,10 +95,12 @@ Declare an environment variable this extension needs. Only injected into contain
 ```typescript
 mercury.env({ from: "MERCURY_GH_TOKEN" });                    // injected as GH_TOKEN
 mercury.env({ from: "MERCURY_GH_TOKEN", as: "GITHUB_TOKEN" }); // custom container name
+mercury.env({ from: "MERCURY_STT_API_KEY", hostOnly: true }); // host-side only
 ```
 
 - `from` — env var name as set in `.env` (e.g. `MERCURY_GH_TOKEN`)
 - `as` — (optional) name inside the container. Defaults to `from` with `MERCURY_` prefix stripped
+- `hostOnly` — (optional) claim the var (kept out of the blind `MERCURY_*` passthrough) but **never inject it into any container**. Use for secrets consumed only by host-side hooks/jobs (e.g. an STT API key used in `before_container`).
 
 Can be called multiple times for multiple env vars.
 
@@ -222,6 +224,8 @@ mercury.config("enabled", {
 ```
 
 Keys are namespaced to the extension: the above registers `napkin.enabled`. Users set it via `mrctl config set napkin.enabled false`.
+
+In hooks and jobs, read values with `ctx.getConfig(spaceId, "napkin.enabled")` instead of `ctx.db.getSpaceConfig(...) ?? default`. It resolves the full chain: per-space value → `@global` scope (dashboard **Features** page) → `extensions:` section in `mercury.yaml` → the registered default. This makes deployment-wide defaults work for auto-created spaces without any per-space setup.
 
 ### `mercury.widget(def)`
 

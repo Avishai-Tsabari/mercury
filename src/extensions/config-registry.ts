@@ -8,6 +8,15 @@
 
 import type { ConfigDef } from "./types.js";
 
+/**
+ * Reserved pseudo-space id holding deployment-wide config defaults in the
+ * `space_config` table. Resolution order for extension config:
+ * per-space → `@global` → mercury.yaml `extensions:` → registered default.
+ * Real space ids are platform-derived (e.g. "telegram:123") and can never
+ * collide with this value.
+ */
+export const GLOBAL_CONFIG_SPACE_ID = "@global";
+
 export interface RegisteredConfig {
   /** Extension that owns this key. */
   extension: string;
