@@ -49,10 +49,18 @@ describe("Runtime rate limiting", () => {
     }));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     runtime.rateLimiter.stopCleanup();
     runtime.db.close();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Windows: SQLite handles release asynchronously — retry cleanup on EBUSY
+    for (let i = 0; i < 5; i++) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
   });
 
   test("allows requests under rate limit", async () => {
@@ -252,10 +260,18 @@ describe("Role-based daily rate limiting", () => {
     }));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     runtime.rateLimiter.stopCleanup();
     runtime.db.close();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Windows: SQLite handles release asynchronously — retry cleanup on EBUSY
+    for (let i = 0; i < 5; i++) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
   });
 
   test("admin with rate_limit.admin=0 gets unlimited daily access", async () => {

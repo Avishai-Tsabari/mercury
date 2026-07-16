@@ -72,10 +72,18 @@ describe("Runtime sliding window context", () => {
     runtime.db.setRole("test-group", "admin1", "admin", "test");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     runtime.rateLimiter.stopCleanup();
     runtime.db.close();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Windows: SQLite handles release asynchronously — retry cleanup on EBUSY
+    for (let i = 0; i < 5; i++) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
   });
 
   test("passes messages array to containerRunner.reply", async () => {
