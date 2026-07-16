@@ -25,6 +25,11 @@ import type {
   TokenUsage,
 } from "../types.js";
 import { formatCategoryHelp, formatHelp } from "./commands.js";
+import {
+  DIRECT_SEND_MAX_LENGTH,
+  DirectSendError,
+  resolveRecipientSpaceId,
+} from "./direct-send.js";
 import { hasPermission, resolveRole } from "./permissions.js";
 import { getActiveProfilePrompt } from "./profiles.js";
 import { RateLimiter } from "./rate-limiter.js";
@@ -147,6 +152,9 @@ export class MercuryCoreRuntime {
       config: this.config,
       log: logger,
       configRegistry,
+      // Late-bound: messageSender is set by startScheduler after adapters
+      // come up; sendDirect checks readiness at call time.
+      sendDirect: (recipient, text) => this.sendDirect(recipient, text),
     });
     this.warnUncoveredSensitiveSpaces();
   }
@@ -301,6 +309,47 @@ export class MercuryCoreRuntime {
 
   getMessageSender(): MessageSender | undefined {
     return this.messageSender;
+  }
+
+  /**
+   * Deterministic single-recipient send — no agent run, no LLM. Resolves the
+   * recipient callerId-first (see resolveRecipientSpaceId), then writes to
+   * the adapter outbox via MessageSender. Throws DirectSendError.
+   */
+  async sendDirect(
+    recipient: string,
+    text: string,
+  ): Promise<{ spaceId: string }> {
+    if (!this.messageSender) {
+      throw DirectSendError.senderNotReady();
+    }
+    const trimmed = typeof text === "string" ? text.trim() : "";
+    if (!trimmed) {
+      throw DirectSendError.invalidText("Missing or empty text");
+    }
+    if (trimmed.length > DIRECT_SEND_MAX_LENGTH) {
+      throw DirectSendError.invalidText(
+        `Text exceeds ${DIRECT_SEND_MAX_LENGTH} character limit`,
+      );
+    }
+    const spaceId = resolveRecipientSpaceId(this.db, recipient);
+    if (!spaceId) {
+      throw DirectSendError.unknownRecipient(recipient);
+    }
+    try {
+      await this.messageSender.send(spaceId, trimmed);
+      logger.info("Direct send delivered", {
+        spaceId,
+        textLength: trimmed.length,
+      });
+    } catch (err) {
+      logger.error("Direct send failed", {
+        spaceId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+    return { spaceId };
   }
 
   async broadcastToAutoSpaces(text: string): Promise<{

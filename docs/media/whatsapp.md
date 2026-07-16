@@ -155,7 +155,7 @@ Unknown MIME types default to `.bin`.
 
 1. **No re-download** — Media is downloaded once when the message arrives. If the file is deleted, it's gone.
 
-2. **No transcription** — Voice notes are saved as audio files. pi cannot play them. Future: add Whisper transcription.
+2. **No built-in transcription** — Voice notes are saved as audio files; pi cannot play them. Install the **voice-transcribe** extension (local Whisper or cloud OpenAI/Groq/Gemini) to prepend a text transcript — see [overview.md](overview.md#voice-transcription).
 
 3. **Reply context doesn't include file** — When replying to a media message, we include metadata but not the actual file path. The original attachment would need to be looked up.
 

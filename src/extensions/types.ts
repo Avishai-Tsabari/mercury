@@ -40,6 +40,20 @@ export interface MercuryExtensionContext {
    * value set anywhere. Prefer this over `db.getSpaceConfig(...) ?? DEFAULT`.
    */
   getConfig(spaceId: string, key: string): string | null;
+  /**
+   * Deterministic direct send — writes straight to the adapter outbox, no
+   * agent run, no LLM in the path. Host/extension-only (never exposed to
+   * space members). `to` resolves callerId-first: an exact space id, a raw
+   * WhatsApp caller id (phone JID or opaque LID — same normalization that
+   * keys DM auto-spaces), a platform-qualified id ("whatsapp:123@lid"), or
+   * a phone with leading "+". Never creates spaces.
+   *
+   * Throws `DirectSendError` (from core/direct-send.js) with `reason`:
+   * "sender_not_ready" (adapters not up yet, or this context has no delivery
+   * path), "unknown_recipient" (no existing space matches), "invalid_text"
+   * (empty or over 4096 chars).
+   */
+  send(opts: { to: string; text: string }): Promise<{ spaceId: string }>;
 }
 
 // ---------------------------------------------------------------------------

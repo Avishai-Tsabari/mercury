@@ -72,7 +72,7 @@ export const EXTENSION_CATALOG: ExtensionCatalogEntry[] = [
     name: "voice-transcribe",
     label: "Voice transcription",
     description:
-      "Transcribe voice with local Python (Transformers or Faster-Whisper) or Hugging Face Inference API.",
+      "Transcribe voice notes: local Python (Transformers or Faster-Whisper), OpenAI-compatible cloud (OpenAI/Groq), Google Gemini, or Hugging Face Inference API.",
     category: "voice",
     sourceDir: "voice-transcribe",
     requiresRestart: true,

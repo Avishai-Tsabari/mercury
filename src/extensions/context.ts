@@ -3,6 +3,7 @@
  */
 
 import type { AppConfig } from "../config.js";
+import { DirectSendError } from "../core/direct-send.js";
 import { hasPermission, resolveRole } from "../core/permissions.js";
 import type { Logger } from "../logger.js";
 import type { Db } from "../storage/db.js";
@@ -45,8 +46,17 @@ export function createMercuryExtensionContext(opts: {
   config: AppConfig;
   log: Logger;
   configRegistry?: ConfigRegistry | null;
+  /**
+   * Delivery path for ctx.send — late-bound to the runtime's sendDirect.
+   * Contexts created without one (e.g. connection status probes) get a
+   * ctx.send that throws DirectSendError("sender_not_ready").
+   */
+  sendDirect?: (
+    recipient: string,
+    text: string,
+  ) => Promise<{ spaceId: string }>;
 }): MercuryExtensionContext {
-  const { db, config, log, configRegistry } = opts;
+  const { db, config, log, configRegistry, sendDirect } = opts;
   return {
     db,
     config,
@@ -64,6 +74,15 @@ export function createMercuryExtensionContext(opts: {
         : [];
       const role = resolveRole(db, spaceId, callerId, seededAdmins);
       return hasPermission(db, spaceId, role, permission);
+    },
+    async send(sendOpts: {
+      to: string;
+      text: string;
+    }): Promise<{ spaceId: string }> {
+      if (!sendDirect) {
+        throw DirectSendError.senderNotReady();
+      }
+      return sendDirect(sendOpts.to, sendOpts.text);
     },
     getConfig(spaceId: string, key: string): string | null {
       return resolveExtensionConfig({

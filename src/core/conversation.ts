@@ -19,7 +19,7 @@ function normalizePhone(raw: string): string {
   return raw.replace(/^[+]+/, "").replace(/@.*$/, "");
 }
 
-function deriveSpaceId(platform: string, externalId: string): string {
+export function deriveDmSpaceId(platform: string, externalId: string): string {
   const cleaned = normalizePhone(externalId)
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "");
@@ -78,7 +78,7 @@ export function resolveConversation(
     };
   }
 
-  const spaceId = deriveSpaceId(platform, externalId);
+  const spaceId = deriveDmSpaceId(platform, externalId);
   db.ensureSpace(spaceId);
 
   const displayName = authorName || senderNormalized;
