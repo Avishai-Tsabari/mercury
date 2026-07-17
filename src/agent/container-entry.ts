@@ -835,6 +835,13 @@ function invokePiOnce(
       "--print",
       "--mode",
       "json",
+      // Skip pi's project-trust store entirely. The store lives in
+      // /home/mercury/.pi/agent (mounted :ro) and even a read locks it via
+      // proper-lockfile (mkdir trust.json.lock → EROFS). Workspaces with
+      // trust-requiring resources already resolved to "untrusted" in
+      // non-interactive mode, and without such resources nothing trust-gated
+      // loads — so --no-approve preserves behavior either way.
+      "--no-approve",
       ...sessionArgs,
       "--provider",
       provider,

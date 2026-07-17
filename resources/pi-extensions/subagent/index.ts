@@ -244,7 +244,9 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	// --no-approve: the trust store dir (~/.pi/agent) is mounted read-only in
+	// containers and any trust-store access acquires a lock there (EROFS crash).
+	const args: string[] = ["--mode", "json", "-p", "--no-session", "--no-approve"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
