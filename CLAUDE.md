@@ -42,3 +42,20 @@ mercury service uninstall # Remove service
 - **Tests**: Co-located in `tests/`, use temp DBs
 - **Config**: `loadConfig()` in `config.ts` — optional `mercury.yaml` + `MERCURY_*` env (env wins); see `docs/configuration.md`
 - **Errors**: Use typed errors from `container-error.ts`
+
+## Refactoring Workflow
+
+Refactoring is audit-first and always behavior-preserving. Never refactor opportunistically inside a feature or bug session — file a finding instead.
+
+```
+docs/refactor/
+  audits/{date}-{scope}.md    # /f-refactor-audit reports — scored findings, read-only
+  {slug}.md                   # active refactor doc (contract, safety net, plan, log)
+  archive/{date}-{slug}.md    # completed refactors with retrospective
+```
+
+1. **Audit** — `/f-refactor-audit [scope]` reads code (changes nothing) and writes a scored findings report
+2. **Execute** — `/f-refactor-dev {audit} F{n}` runs one finding: behavior contract → characterization tests if coverage is thin → small steps with the check suite green after every step, in an isolated worktree
+3. **Archive** — retrospective filled, doc moved to `archive/`, squash-merged like `/f-bug-fix`
+
+Prime invariant: a refactor never changes observable behavior. Bugs found mid-refactor are preserved and filed via `/f-bug-report`, not fixed in place.
