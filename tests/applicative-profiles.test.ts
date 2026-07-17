@@ -12,6 +12,7 @@ import {
   getActiveProfilePrompt,
   loadActiveProfile,
   loadProfileFromDir,
+  logProfileMemberPermissionExclusions,
   persistActiveProfile,
   setActiveProfilePrompt,
   validateProfileCapabilities,
@@ -215,5 +216,68 @@ describe("profile-aware permission resolution", () => {
     expect(getRolePermissions(db, "main", "member").has("prefs.get")).toBe(
       true,
     );
+  });
+});
+
+describe("logProfileMemberPermissionExclusions", () => {
+  const collect = () => {
+    const warnings: string[] = [];
+    return {
+      warnings,
+      log: { warn: (msg: string) => void warnings.push(msg) },
+    };
+  };
+
+  test("warns for member-default extension excluded by the profile", () => {
+    const { warnings, log } = collect();
+    logProfileMemberPermissionExclusions(
+      [
+        {
+          name: "voice-transcribe",
+          permission: { defaultRoles: ["admin", "member"] },
+        },
+      ],
+      ["prompt", "prefs.get", "barber"],
+      log,
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('"voice-transcribe"');
+    expect(warnings[0]).toContain("member_permissions");
+  });
+
+  test("silent when the profile grants the extension to members", () => {
+    const { warnings, log } = collect();
+    logProfileMemberPermissionExclusions(
+      [{ name: "barber", permission: { defaultRoles: ["admin", "member"] } }],
+      ["prompt", "barber"],
+      log,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  test("silent for admin-only extensions", () => {
+    const { warnings, log } = collect();
+    logProfileMemberPermissionExclusions(
+      [{ name: "ops", permission: { defaultRoles: ["admin"] } }],
+      ["prompt"],
+      log,
+    );
+    expect(warnings).toHaveLength(0);
+  });
+
+  test("silent for extensions without a registered permission", () => {
+    const { warnings, log } = collect();
+    logProfileMemberPermissionExclusions([{ name: "plain" }], ["prompt"], log);
+    expect(warnings).toHaveLength(0);
+  });
+
+  test("silent when the profile does not scope members", () => {
+    const { warnings, log } = collect();
+    logProfileMemberPermissionExclusions(
+      [{ name: "voice-transcribe", permission: { defaultRoles: ["member"] } }],
+      null,
+      log,
+    );
+    expect(warnings).toHaveLength(0);
   });
 });

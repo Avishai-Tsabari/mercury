@@ -234,6 +234,31 @@ export function getActiveProfilePrompt(): string | null {
 }
 
 /**
+ * Warn about loaded extensions whose permission grants `member` by default but
+ * whose permission name is missing from the active profile's exhaustive
+ * `member_permissions` list. The override itself is by design (profiles scope
+ * customer-facing members to least privilege); the warning exists because the
+ * resulting per-message hook skips are otherwise invisible in the logs.
+ */
+export function logProfileMemberPermissionExclusions(
+  extensions: Array<{ name: string; permission?: { defaultRoles: string[] } }>,
+  memberPermissions: string[] | null,
+  log: { warn: (msg: string, obj?: Record<string, unknown>) => void },
+): void {
+  if (!Array.isArray(memberPermissions)) return;
+  // Match toPermissionSet's trimming so a padded entry doesn't false-positive.
+  const granted = new Set(memberPermissions.map((s) => s.trim()));
+  for (const ext of extensions) {
+    if (!ext.permission?.defaultRoles.includes("member")) continue;
+    if (granted.has(ext.name)) continue;
+    log.warn(
+      `Extension "${ext.name}" grants role "member" by default, but the active profile's member_permissions excludes it — member callers cannot use it unless a space-level permission override grants it. Add "${ext.name}" to the profile's member_permissions (or the deployed active-profile.json) to enable it.`,
+      { extension: ext.name },
+    );
+  }
+}
+
+/**
  * Throw if any of the profile's declared `capabilities` is not present as an
  * installed extension directory under `<dataDir>/extensions`. Capabilities may
  * be satisfied either by a bundled/pre-installed extension or by one the

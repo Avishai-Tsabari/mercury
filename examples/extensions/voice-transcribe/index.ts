@@ -309,6 +309,7 @@ function localTimeoutMs(): number {
 type HookCtx = {
   db: { getSpaceConfig: (spaceId: string, key: string) => string | null };
   log: {
+    debug: (msg: string, extra?: unknown) => void;
     info: (msg: string, extra?: unknown) => void;
     warn: (msg: string, extra?: unknown) => void;
     error: (msg: string, extra?: unknown) => void;
@@ -399,6 +400,11 @@ export default function (mercury: {
 
   mercury.on("before_container", async (event, ctx) => {
     if (!ctx.hasCallerPermission(event.spaceId, event.callerId, EXT)) {
+      ctx.log.debug("Skipping voice transcription: caller lacks permission", {
+        extension: EXT,
+        spaceId: event.spaceId,
+        callerId: event.callerId,
+      });
       return undefined;
     }
 

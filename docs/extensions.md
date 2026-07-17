@@ -85,6 +85,11 @@ mercury.permission({ defaultRoles: ["admin", "member"] });
 - `defaultRoles` — roles that get this permission by default
 - `admin` always gets all permissions automatically
 - Per-space overrides in `space_config` take precedence
+- **Applicative profiles override `defaultRoles`**: when the active profile
+  defines `member_permissions`, that list is exhaustive for the `member` role —
+  an extension is only usable by members if its name appears there. Mercury logs
+  a startup warning for each loaded extension whose `defaultRoles` include
+  `member` but which the profile excludes.
 
 Can only be called once per extension.
 

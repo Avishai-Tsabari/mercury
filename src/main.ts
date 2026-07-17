@@ -35,7 +35,11 @@ import { createChatShim } from "./chat-shim.js";
 import { loadConfig, resolveProjectPath } from "./config.js";
 import { createMessageHandler } from "./core/handler.js";
 import { setActiveProfileMemberPermissions } from "./core/permissions.js";
-import { loadActiveProfile, setActiveProfilePrompt } from "./core/profiles.js";
+import {
+  loadActiveProfile,
+  logProfileMemberPermissionExclusions,
+  setActiveProfilePrompt,
+} from "./core/profiles.js";
 import { MercuryCoreRuntime } from "./core/runtime.js";
 import { runStorageCleanup } from "./core/storage-cleanup.js";
 import { isOverQuota } from "./core/storage-guard.js";
@@ -228,6 +232,11 @@ async function main() {
       memberPermissions:
         activeProfile.memberPermissions?.join(",") ?? "(unscoped)",
     });
+    logProfileMemberPermissionExclusions(
+      registry.list(),
+      activeProfile.memberPermissions ?? null,
+      logger,
+    );
   }
 
   logExtensionCapabilityMismatches(
