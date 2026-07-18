@@ -7,13 +7,13 @@ export const broadcast = new Hono<Env>();
 
 broadcast.post("/", async (c) => {
   const { callerId } = getAuth(c);
-  const { config, runtime } = getApiCtx(c);
+  const { config, db, runtime } = getApiCtx(c);
 
   if (!config.dmAutoSpaceEnabled) {
     return c.json({ error: "dm_auto_space is not enabled" }, 503);
   }
 
-  if (!isGlobalAdmin(callerId, config)) {
+  if (!isGlobalAdmin(callerId, config, db)) {
     logger.warn("Broadcast denied — caller is not a global admin", {
       callerId,
     });

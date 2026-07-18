@@ -11,7 +11,7 @@ character.get("/", (c) => {
   const { callerId } = getAuth(c);
   const { config, db } = getApiCtx(c);
 
-  if (!isGlobalAdmin(callerId, config)) {
+  if (!isGlobalAdmin(callerId, config, db)) {
     logger.warn("Character get denied — caller is not a global admin", {
       callerId,
     });
@@ -28,7 +28,7 @@ character.put("/", async (c) => {
   const { callerId } = getAuth(c);
   const { config, db } = getApiCtx(c);
 
-  if (!isGlobalAdmin(callerId, config)) {
+  if (!isGlobalAdmin(callerId, config, db)) {
     logger.warn("Character set denied — caller is not a global admin", {
       callerId,
     });
@@ -57,7 +57,7 @@ character.delete("/", (c) => {
   const { callerId } = getAuth(c);
   const { config, db } = getApiCtx(c);
 
-  if (!isGlobalAdmin(callerId, config)) {
+  if (!isGlobalAdmin(callerId, config, db)) {
     logger.warn("Character clear denied — caller is not a global admin", {
       callerId,
     });

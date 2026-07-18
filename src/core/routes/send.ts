@@ -13,9 +13,9 @@ export const send = new Hono<Env>();
 
 send.post("/", async (c) => {
   const { callerId } = getAuth(c);
-  const { config, runtime } = getApiCtx(c);
+  const { config, db, runtime } = getApiCtx(c);
 
-  if (!isGlobalAdmin(callerId, config)) {
+  if (!isGlobalAdmin(callerId, config, db)) {
     logger.warn("Direct send denied — caller is not a global admin", {
       callerId,
     });
