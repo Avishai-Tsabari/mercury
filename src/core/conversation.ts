@@ -38,6 +38,14 @@ function seedSpaceConfigIfAbsent(
   }
 }
 
+/** First jid of a `<chatJid>:<threadJid>` external id, as a callerId. */
+function callerIdFromExternalId(platform: string, externalId: string): string {
+  return `${platform}:${externalId.split(":")[0]}`;
+}
+
+/** Double-split pairs already warned about — once per process, not per message. */
+const warnedDoubleSplits = new Set<string>();
+
 export function resolveConversation(
   db: Db,
   platform: string,
@@ -46,6 +54,7 @@ export function resolveConversation(
   observedTitle?: string,
   autoSpace?: AutoSpaceConfig,
   authorName?: string,
+  aliasExternalId?: string,
 ): ConversationResolution | null {
   const conversation = db.ensureConversation(
     platform,
@@ -55,14 +64,76 @@ export function resolveConversation(
   );
 
   if (conversation.spaceId) {
+    // Pre-upgrade double split: this person also has a space under their old
+    // identity. The canonical space wins; surface both for manual cleanup.
+    if (
+      kind === "dm" &&
+      aliasExternalId &&
+      aliasExternalId !== externalId &&
+      !warnedDoubleSplits.has(`${platform}:${aliasExternalId}`)
+    ) {
+      const aliasConversation = db.findConversation(platform, aliasExternalId);
+      if (
+        aliasConversation?.spaceId &&
+        aliasConversation.spaceId !== conversation.spaceId
+      ) {
+        warnedDoubleSplits.add(`${platform}:${aliasExternalId}`);
+        logger.warn(
+          "dm-auto-space: same person has two spaces (canonical wins)",
+          {
+            platform,
+            canonicalExternalId: externalId,
+            canonicalSpaceId: conversation.spaceId,
+            aliasExternalId,
+            aliasSpaceId: aliasConversation.spaceId,
+          },
+        );
+      }
+    }
     return { conversation, spaceId: conversation.spaceId };
+  }
+
+  // Sticky-space adoption: the same person previously appeared under another
+  // identity (e.g. a WhatsApp LID before its phone mapping was known) and a
+  // space already exists there. Link this conversation to that space instead
+  // of creating a fresh one, and carry per-user rows (roles, mutes, rate
+  // usage) over to the canonical caller id. Runs regardless of auto-space so
+  // manually linked conversations keep working too.
+  if (kind === "dm" && aliasExternalId && aliasExternalId !== externalId) {
+    const aliasConversation = db.findConversation(platform, aliasExternalId);
+    if (aliasConversation?.spaceId) {
+      const spaceId = aliasConversation.spaceId;
+      db.linkConversation(conversation.id, spaceId);
+      const migrated = db.migrateCallerId(
+        spaceId,
+        callerIdFromExternalId(platform, aliasExternalId),
+        callerIdFromExternalId(platform, externalId),
+      );
+      logger.info(
+        "dm-auto-space: adopted existing space for canonical identity",
+        {
+          platform,
+          externalId,
+          aliasExternalId,
+          spaceId,
+          migratedRoles: migrated.roles,
+          migratedMutes: migrated.mutes,
+        },
+      );
+      return { conversation: { ...conversation, spaceId }, spaceId };
+    }
   }
 
   if (!autoSpace?.enabled || kind !== "dm") return null;
 
   const senderNormalized = normalizePhone(externalId);
+  const aliasNormalized = aliasExternalId
+    ? normalizePhone(aliasExternalId)
+    : undefined;
   const isAdmin = autoSpace.adminIds.some(
-    (n) => normalizePhone(n) === senderNormalized,
+    (n) =>
+      normalizePhone(n) === senderNormalized ||
+      (aliasNormalized !== undefined && normalizePhone(n) === aliasNormalized),
   );
 
   if (isAdmin) {

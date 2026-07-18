@@ -214,6 +214,17 @@ export class Db {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS wa_identity_aliases (
+        lid TEXT PRIMARY KEY,
+        pn TEXT NOT NULL,
+        source TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wa_aliases_pn
+      ON wa_identity_aliases(pn);
     `);
     this.ensureMessagesRunMetaColumn();
     this.ensureChatStateClearBoundaryColumn();
@@ -1586,6 +1597,102 @@ export class Db {
       reason: r.reason,
       mutedBy: r.muted_by,
     }));
+  }
+
+  // ─── WhatsApp Identity Aliases ────────────────────────────────────────
+
+  /**
+   * Upsert a learned LID↔phone pair. Returns true when the pair is new or
+   * changed (callers use this to log the learn exactly once).
+   */
+  learnWaAlias(lid: string, pn: string, source: string): boolean {
+    const now = Date.now();
+    const result = this.db
+      .query(
+        `INSERT INTO wa_identity_aliases(lid, pn, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(lid) DO UPDATE SET
+           pn = excluded.pn,
+           source = excluded.source,
+           updated_at = excluded.updated_at
+         WHERE wa_identity_aliases.pn != excluded.pn`,
+      )
+      .run(lid, pn, source, now, now);
+    return result.changes > 0;
+  }
+
+  getWaPnForLid(lid: string): string | null {
+    const row = this.db
+      .query("SELECT pn FROM wa_identity_aliases WHERE lid = ?")
+      .get(lid) as { pn: string } | null;
+    return row?.pn ?? null;
+  }
+
+  /** Most recently learned LID for a phone (a phone can map to several LIDs). */
+  getWaLidForPn(pn: string): string | null {
+    const row = this.db
+      .query(
+        `SELECT lid FROM wa_identity_aliases WHERE pn = ?
+         ORDER BY updated_at DESC, lid LIMIT 1`,
+      )
+      .get(pn) as { lid: string } | null;
+    return row?.lid ?? null;
+  }
+
+  /**
+   * Rewrite per-user rows in a space from one caller id to another
+   * (space adoption after identity canonicalization). Rows whose target
+   * already exists are dropped rather than duplicated.
+   */
+  migrateCallerId(
+    spaceId: string,
+    oldCallerId: string,
+    newCallerId: string,
+  ): { roles: number; mutes: number } {
+    if (oldCallerId === newCallerId) return { roles: 0, mutes: 0 };
+    const now = Date.now();
+    let roles = 0;
+    let mutes = 0;
+    const tx = this.db.transaction(() => {
+      roles = this.db
+        .query(
+          `UPDATE OR IGNORE space_roles
+           SET platform_user_id = ?, updated_at = ?
+           WHERE space_id = ? AND platform_user_id = ?`,
+        )
+        .run(newCallerId, now, spaceId, oldCallerId).changes;
+      this.db
+        .query(
+          "DELETE FROM space_roles WHERE space_id = ? AND platform_user_id = ?",
+        )
+        .run(spaceId, oldCallerId);
+
+      mutes = this.db
+        .query(
+          `UPDATE OR IGNORE mutes
+           SET platform_user_id = ?
+           WHERE space_id = ? AND platform_user_id = ?`,
+        )
+        .run(newCallerId, spaceId, oldCallerId).changes;
+      this.db
+        .query("DELETE FROM mutes WHERE space_id = ? AND platform_user_id = ?")
+        .run(spaceId, oldCallerId);
+
+      this.db
+        .query(
+          `UPDATE OR IGNORE daily_rate_usage
+           SET platform_user_id = ?, updated_at = ?
+           WHERE space_id = ? AND platform_user_id = ?`,
+        )
+        .run(newCallerId, now, spaceId, oldCallerId);
+      this.db
+        .query(
+          "DELETE FROM daily_rate_usage WHERE space_id = ? AND platform_user_id = ?",
+        )
+        .run(spaceId, oldCallerId);
+    });
+    tx();
+    return { roles, mutes };
   }
 
   // ─── Daily Rate Usage ─────────────────────────────────────────────────

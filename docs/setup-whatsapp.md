@@ -86,6 +86,38 @@ mercury service install
 | Messages not arriving | Check `MERCURY_ENABLE_WHATSAPP=true` and re-auth |
 | Old messages appear on startup | Normal — Mercury ignores pre-connection messages |
 
+## Identity: LID vs Phone Number
+
+WhatsApp non-deterministically identifies the same person by either their
+phone-number JID (`972501234567@s.whatsapp.net`) or an anonymized LID
+(`24417056866472@lid`). Mercury canonicalizes every inbound identity to the
+phone form whenever the mapping is known, so a person always resolves to one
+caller id, one conversation, and one DM auto-space.
+
+How it works:
+
+1. Baileys attaches the alternate form on many message keys; when it does,
+   Mercury uses the phone form and records the LID↔phone pair in the
+   `wa_identity_aliases` table (log line: `WhatsApp identity alias learned`).
+2. When a message arrives LID-tagged without the alternate field, Mercury
+   consults Baileys' internal mapping store, then its own alias table.
+3. If no mapping is known anywhere, the LID is kept as-is. This self-heals:
+   the moment a later message reveals the pair, the person's phone-keyed
+   conversation **adopts** the space that was created under the LID — history,
+   config, and settings are preserved, and per-user roles/mutes are rewritten
+   to the canonical caller id (log line: `dm-auto-space: adopted existing
+   space for canonical identity`). Existing `dm-<lid-digits>` space ids keep
+   their name; only the identity resolution changes.
+
+If a person somehow ended up with **two** spaces (one LID-keyed, one
+phone-keyed) before canonicalization existed, the phone-keyed space wins and
+a warning names both spaces (`same person has two spaces`) so you can merge
+or delete the stale one manually.
+
+A LID's digits are unrelated to the phone number — Mercury never guesses a
+mapping; pairs only come from WhatsApp itself. For support cases you can
+insert a pair manually into `wa_identity_aliases` with `source = 'manual'`.
+
 ## Security
 
 - Credentials in `.mercury/whatsapp-auth/` are sensitive — treat like passwords

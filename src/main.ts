@@ -287,6 +287,14 @@ async function main() {
     bridges.whatsapp = new WhatsAppBridge(
       adapters.whatsapp as WhatsAppBaileysAdapter,
     );
+    (adapters.whatsapp as WhatsAppBaileysAdapter).aliasStore = {
+      getPnForLid: (lid) => core.db.getWaPnForLid(lid),
+      learn: (lid, pn, source) => {
+        if (core.db.learnWaAlias(lid, pn, source)) {
+          logger.info("WhatsApp identity alias learned", { lid, pn, source });
+        }
+      },
+    };
     (adapters.whatsapp as WhatsAppBaileysAdapter).onGroupRemoval = (
       chatJid,
     ) => {

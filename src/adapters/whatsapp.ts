@@ -30,6 +30,13 @@ import {
 import { logger } from "../logger.js";
 import { normalizeChatMarkdown } from "../text/markdown.js";
 import { applyRtlDirection } from "../text/rtl.js";
+import {
+  canonicalizeJidSync,
+  resolveKeyIdentities,
+  resolveKeyIdentitiesSync,
+  type WaAliasStore,
+  type WaKeyLike,
+} from "./whatsapp-identity.js";
 import { detectWhatsAppMedia } from "./whatsapp-media.js";
 
 type WhatsAppThreadId = {
@@ -68,12 +75,15 @@ function getContextInfo(
 function buildReplyContext(
   message?: proto.IMessage | null,
   pushNames?: Map<string, string>,
+  canonicalize?: (jid: string) => string,
 ): string | undefined {
   const contextInfo = getContextInfo(message);
   if (!contextInfo?.quotedMessage) return undefined;
 
   const quotedText = extractText(contextInfo.quotedMessage).trim();
-  const quotedJid = contextInfo.participant || "unknown";
+  const rawQuotedJid = contextInfo.participant || "unknown";
+  // pushNames is keyed by canonical jid — resolve before lookup.
+  const quotedJid = canonicalize ? canonicalize(rawQuotedJid) : rawQuotedJid;
   const quotedName =
     pushNames?.get(quotedJid) || quotedJid.split("@")[0] || "unknown";
   const quotedMessageId = contextInfo.stanzaId || "unknown";
@@ -131,6 +141,7 @@ export type WhatsAppQrStatus =
 export interface WhatsAppAdapterOptions {
   userName?: string;
   authDir?: string;
+  aliasStore?: WaAliasStore;
 }
 
 export class WhatsAppBaileysAdapter
@@ -154,11 +165,26 @@ export class WhatsAppBaileysAdapter
   /** Called when the bot is removed or leaves a WhatsApp group. */
   onGroupRemoval?: (chatJid: string) => void;
 
+  /** Persistent LID↔phone alias store — assigned by main.ts after core init. */
+  aliasStore?: WaAliasStore;
+
   constructor(options?: WhatsAppAdapterOptions) {
     this.userName = options?.userName ?? "mercury";
     this.authDir =
       options?.authDir ?? path.join(process.cwd(), ".mercury", "whatsapp-auth");
+    this.aliasStore = options?.aliasStore;
   }
+
+  /** Async LID→phone lookup backed by Baileys' internal mapping store. */
+  private lidLookup = async (lid: string): Promise<string | null> => {
+    const store = this.sock?.signalRepository?.lidMapping;
+    if (!store) return null;
+    return (await store.getPNForLID(lid)) ?? null;
+  };
+
+  /** Sync canonicalization for jids outside the message key (quoted senders). */
+  private canonicalizeQuoted = (jid: string): string =>
+    canonicalizeJidSync(jid, undefined, this.aliasStore).canonical;
 
   /**
    * Get current QR status for API endpoint
@@ -412,15 +438,22 @@ export class WhatsAppBaileysAdapter
 
   parseMessage(raw: proto.IWebMessageInfo): Message<proto.IWebMessageInfo> {
     const key = raw.key;
-    const remoteJid = key?.remoteJid ?? "unknown@s.whatsapp.net";
-    const sender = key?.participant || remoteJid;
+    // Canonicalize on the raw key — the placeholder fallback is applied only
+    // after resolution so it can never be learned as a real phone mapping.
+    const identities = resolveKeyIdentitiesSync({ ...key }, this.aliasStore);
+    const chatJid = identities.chat.canonical || "unknown@s.whatsapp.net";
+    const sender = identities.sender.canonical || chatJid;
     const senderName = raw.pushName || sender.split("@")[0] || "unknown";
     const baseText = extractText(raw.message).trim();
-    const replyContext = buildReplyContext(raw.message, this.pushNames);
+    const replyContext = buildReplyContext(
+      raw.message,
+      this.pushNames,
+      this.canonicalizeQuoted,
+    );
     const text = [baseText, replyContext].filter(Boolean).join("\n\n").trim();
     const threadId = this.encodeThreadId({
-      chatJid: remoteJid,
-      threadJid: remoteJid,
+      chatJid,
+      threadJid: chatJid,
     });
 
     return new Message({
@@ -493,7 +526,21 @@ export class WhatsAppBaileysAdapter
       return;
     }
 
-    const sender = msg.key.participant || remoteJid;
+    // Canonicalize identities (LID → phone) before anything downstream sees
+    // them: sender becomes callerId, DM chat jid becomes the thread/space key.
+    const identities = await resolveKeyIdentities(
+      msg.key as WaKeyLike,
+      this.aliasStore,
+      this.lidLookup,
+    );
+    const chatJid = identities.chat.canonical;
+    const sender = identities.sender.canonical;
+    if (identities.sender.changed || identities.chat.changed) {
+      logger.debug("WhatsApp identity canonicalized", {
+        sender: identities.sender,
+        chat: identities.chat,
+      });
+    }
     const senderName = msg.pushName || sender.split("@")[0] || "unknown";
 
     // Track push names for reply context resolution
@@ -502,7 +549,11 @@ export class WhatsAppBaileysAdapter
     }
 
     let baseText = extractText(msg.message).trim();
-    const replyContext = buildReplyContext(msg.message, this.pushNames);
+    const replyContext = buildReplyContext(
+      msg.message,
+      this.pushNames,
+      this.canonicalizeQuoted,
+    );
 
     // WhatsApp @-mentions embed JIDs in text (e.g. "@52669955764381").
     // Replace the bot's JID mention with the configured userName so trigger matching works.
@@ -548,12 +599,20 @@ export class WhatsAppBaileysAdapter
     if (!text && !hasMedia) return;
 
     const threadId = this.encodeThreadId({
-      chatJid: remoteJid,
-      threadJid: remoteJid,
+      chatJid,
+      threadJid: chatJid,
     });
+    // When the DM chat jid was canonicalized, expose the original identity's
+    // thread id so the core can adopt a space created under the old (LID) key.
+    const aliasThreadId = identities.chat.changed
+      ? this.encodeThreadId({
+          chatJid: identities.chat.original,
+          threadJid: identities.chat.original,
+        })
+      : undefined;
 
     logger.info("WhatsApp inbound", {
-      remoteJid,
+      remoteJid: chatJid,
       sender,
       isReply: Boolean(replyContext),
       isReplyToBot,
@@ -589,6 +648,7 @@ export class WhatsAppBaileysAdapter
           isReplyToBot,
           replyToMessageId: contextInfo?.stanzaId ?? undefined,
           platformMessageId: msg.key.id ?? undefined,
+          aliasThreadId,
         } as Record<string, unknown>),
       },
       attachments: [],

@@ -168,6 +168,14 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
 
       const { externalId, isDM } = bridge.parseThread(threadId);
       const kind = inferConversationKind(bridge.platform, externalId, isDM);
+      // Adapters that canonicalize identities (WhatsApp LID→phone) expose the
+      // pre-canonicalization thread id so an existing space can be adopted.
+      const aliasThreadId = (
+        message.metadata as { aliasThreadId?: string } | undefined
+      )?.aliasThreadId;
+      const aliasExternalId = aliasThreadId
+        ? bridge.parseThread(aliasThreadId).externalId
+        : undefined;
       const resolution = resolveConversation(
         core.db,
         bridge.platform,
@@ -176,6 +184,7 @@ export function createMessageHandler(opts: MessageHandlerOptions) {
         undefined,
         autoSpaceConfig,
         message.author.userName ?? message.author.fullName,
+        aliasExternalId,
       );
 
       if (!resolution) {
