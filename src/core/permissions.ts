@@ -1,4 +1,5 @@
 import type { Db } from "../storage/db.js";
+import { matchesConfiguredId } from "./global-admin.js";
 
 // ---------------------------------------------------------------------------
 // Built-in permissions (static, cannot be overridden)
@@ -231,5 +232,20 @@ export function resolveRole(
 
   db.upsertMember(spaceId, platformUserId, displayName);
 
-  return db.getRole(spaceId, platformUserId) ?? "member";
+  const role = db.getRole(spaceId, platformUserId) ?? "member";
+
+  // Seeded rows are keyed by the raw config string, which may differ from the
+  // canonical caller id (format looseness, WhatsApp LID vs phone JID). When the
+  // exact lookup misses but the caller matches a configured admin id, promote
+  // the canonical id so the row self-heals. Config admins are always admins —
+  // seedAdmins already re-promotes demoted ones on every re-seed.
+  if (
+    role === "member" &&
+    matchesConfiguredId(platformUserId, seededAdmins, db)
+  ) {
+    db.setRole(spaceId, platformUserId, "admin", "seed");
+    return "admin";
+  }
+
+  return role;
 }

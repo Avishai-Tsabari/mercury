@@ -317,4 +317,68 @@ describe("resolveRole", () => {
     const dbRole = db.getRole("g1", "newuser");
     expect(dbRole).toBe("member");
   });
+
+  test("loosely-formatted seeded admin matches canonical caller", () => {
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(role).toBe("admin");
+  });
+
+  test("LID-seeded admin matches phone-JID caller via learned alias", () => {
+    db.learnWaAlias(
+      "24417056866472@lid",
+      "972542341444@s.whatsapp.net",
+      "key-alt",
+    );
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "24417056866472",
+    ]);
+    expect(role).toBe("admin");
+  });
+
+  test("promotion self-heals the canonical admin row", () => {
+    db.learnWaAlias(
+      "24417056866472@lid",
+      "972542341444@s.whatsapp.net",
+      "key-alt",
+    );
+    resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "24417056866472",
+    ]);
+    expect(db.getRole("g1", "whatsapp:972542341444@s.whatsapp.net")).toBe(
+      "admin",
+    );
+  });
+
+  test("LID-seeded admin without learned alias stays member", () => {
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "24417056866472",
+    ]);
+    expect(role).toBe("member");
+  });
+
+  test("non-admin caller is not promoted by loose matching", () => {
+    const role = resolveRole(db, "g1", "whatsapp:15550001111@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(role).toBe("member");
+  });
+
+  test("config admin demoted to member is re-promoted on next message", () => {
+    seededSpaces.add("g1");
+    db.setRole("g1", "whatsapp:972542341444@s.whatsapp.net", "member", "a1");
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(role).toBe("admin");
+  });
+
+  test("explicit non-member role is not overridden by loose matching", () => {
+    db.setRole("g1", "whatsapp:972542341444@s.whatsapp.net", "moderator", "a1");
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(role).toBe("moderator");
+  });
 });
