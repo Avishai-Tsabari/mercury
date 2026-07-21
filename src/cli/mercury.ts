@@ -18,10 +18,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { loadConfig, resolveProjectPath } from "../config.js";
+import { mergeRawMercuryConfig } from "../config-file.js";
 import { getCatalogEntryByName } from "../extensions/catalog.js";
 import {
   checkExtensionIndexLoads,
-  getGlobalDir,
   getProjectDataDir,
   getUserExtensionsDir,
   installExtensionFromDirectory,
@@ -99,6 +99,39 @@ function loadEnvFile(envPath: string): Record<string, string> {
     }
   }
   return vars;
+}
+
+/**
+ * Resolve the auth.json path the way the running service does: `.env` values
+ * win over process env (mirroring runAction's Object.assign), mercury.yaml
+ * sits under both, and MERCURY_AUTH_PATH / runtime.auth_path override the
+ * default `<dataDir>/global/auth.json`. Falls back to the defaults if the
+ * project config is malformed — auth commands must stay usable to fix it.
+ */
+function resolveAuthJsonPath(): { authPath: string; dataDir: string } {
+  const envPath = join(CWD, ".env");
+  const envVars = existsSync(envPath) ? loadEnvFile(envPath) : {};
+  let authOverride: string | undefined;
+  let dataDir = ".mercury";
+  try {
+    const raw = mergeRawMercuryConfig({ ...process.env, ...envVars }, CWD);
+    if (typeof raw.authPath === "string" && raw.authPath) {
+      authOverride = raw.authPath;
+    }
+    if (typeof raw.dataDir === "string" && raw.dataDir) {
+      dataDir = raw.dataDir;
+    }
+  } catch (e) {
+    console.warn(
+      `[WARN] ${e instanceof Error ? e.message : String(e)} — using default auth path`,
+    );
+  }
+  return {
+    authPath: resolveProjectPath(
+      authOverride ?? join(dataDir, "global", "auth.json"),
+    ),
+    dataDir,
+  };
 }
 
 function withProjectDb<T>(fn: (db: Db) => T): T {
@@ -475,7 +508,7 @@ function doctorAction(): void {
 
   // 4. AI credentials
   console.log("\nAI Credentials:");
-  const authPath = join(getGlobalDir(CWD), "auth.json");
+  const { authPath } = resolveAuthJsonPath();
   const hasOAuth = existsSync(authPath);
   const hasApiKey = !!(
     process.env.MERCURY_ANTHROPIC_API_KEY ||
@@ -963,9 +996,9 @@ authCommand
     if (!provider) throw new Error(`Unknown provider: ${providerId}`);
     console.log(`\nLogging in to ${provider.name}...`);
 
-    // Resolve auth.json path (honors MERCURY_GLOBAL_DIR from .env)
-    const dataDir = getProjectDataDir(CWD);
-    const authPath = join(getGlobalDir(CWD), "auth.json");
+    // Resolve auth.json path exactly like the running service does
+    // (.env + mercury.yaml, MERCURY_AUTH_PATH / runtime.auth_path override).
+    const { authPath, dataDir } = resolveAuthJsonPath();
 
     // Credentials are CWD-scoped: a service running from another directory
     // reads its own <project>/<dataDir>/global/auth.json and will never see
@@ -1091,7 +1124,7 @@ authCommand
   .command("logout [provider]")
   .description("Remove saved OAuth credentials for a provider")
   .action(async (providerArg?: string) => {
-    const authPath = join(getGlobalDir(CWD), "auth.json");
+    const { authPath } = resolveAuthJsonPath();
 
     if (!existsSync(authPath)) {
       console.log("No credentials found.");
@@ -1134,7 +1167,7 @@ authCommand
   .action(async () => {
     const { getOAuthProviders } = await import("@earendil-works/pi-ai/oauth");
 
-    const authPath = join(getGlobalDir(CWD), "auth.json");
+    const { authPath } = resolveAuthJsonPath();
 
     let authData: Record<string, { type?: string; expires?: number }> = {};
     if (existsSync(authPath)) {
