@@ -11,7 +11,7 @@ import {
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { getApiKeyFromPiAuthFile } from "mercury-agent/storage/pi-auth";
+import { getPiAuthCredential } from "mercury-agent/storage/pi-auth";
 
 const KNOWLEDGE_DIR = "knowledge";
 const VAULT_DIRS = ["people", "projects", "references", "daily", "episodes", "weekly", "monthly", "templates"];
@@ -407,11 +407,15 @@ export default function (mercury: {
   // LLM credential resolution for host-side pi spawns
   // ---------------------------------------------------------------------------
 
+  type PiAuthEnvResult =
+    | { ok: true; env: Record<string, string> }
+    | { ok: false; reason: string };
+
   async function resolvePiAuthEnv(config: {
     authPath?: string;
     globalDir: string;
     modelProvider: string;
-  }): Promise<Record<string, string>> {
+  }): Promise<PiAuthEnvResult> {
     const env: Record<string, string> = {};
 
     // 1. Explicit env vars (strip MERCURY_ prefix, matching container-runner)
@@ -421,18 +425,36 @@ export default function (mercury: {
     if (process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN) {
       env.ANTHROPIC_API_KEY = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
     }
+    if (env.ANTHROPIC_API_KEY) return { ok: true, env };
 
-    // 2. Fall back to Mercury's auth.json (OAuth token refresh)
-    if (!env.ANTHROPIC_API_KEY) {
-      const authPath = config.authPath ?? join(config.globalDir, "auth.json");
-      const key = await getApiKeyFromPiAuthFile({
-        provider: config.modelProvider,
-        authPath,
-      });
-      if (key) env.ANTHROPIC_API_KEY = key;
+    // Spawned pi inherits process.env, so an unprefixed host key also works.
+    if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_OAUTH_TOKEN) {
+      return { ok: true, env };
     }
 
-    return env;
+    // 2. Fall back to Mercury's auth.json (OAuth token refresh)
+    const authPath = config.authPath ?? join(config.globalDir, "auth.json");
+    const cred = await getPiAuthCredential({
+      provider: config.modelProvider,
+      authPath,
+    });
+    if (cred.status === "ok") {
+      env.ANTHROPIC_API_KEY = cred.apiKey;
+      return { ok: true, env };
+    }
+
+    // Non-anthropic providers aren't resolvable here — let pi use its own auth.
+    if (config.modelProvider !== "anthropic") {
+      return { ok: true, env };
+    }
+
+    // Fail fast, mirroring the container-runner guard: without a credential
+    // every pi spawn exits 1, one per space per pending date, every run.
+    const reason =
+      cred.status === "refresh-failed"
+        ? `Anthropic OAuth refresh failed for ${authPath} — re-authenticate on the host (run mercury auth login from the project directory that owns that file) or set MERCURY_ANTHROPIC_API_KEY`
+        : `no Anthropic credential configured (checked ${authPath}) — run mercury auth login or set MERCURY_ANTHROPIC_API_KEY / MERCURY_ANTHROPIC_OAUTH_TOKEN`;
+    return { ok: false, reason };
   }
 
   // ---------------------------------------------------------------------------
@@ -453,7 +475,18 @@ export default function (mercury: {
           return;
         }
 
-        const piAuthEnv = await resolvePiAuthEnv(ctx.config);
+        const piAuth = await resolvePiAuthEnv(ctx.config);
+        if (!piAuth.ok) {
+          // One clear host-level error instead of a failed pi spawn per
+          // space per pending date; dates stay pending for the next run.
+          ctx.log.error("Skipping distillation: no Anthropic credential", {
+            reason: piAuth.reason,
+          });
+          mercury.store.set("last-distill", new Date().toISOString());
+          mercury.store.set("last-distill-status", "skipped: no credential");
+          return;
+        }
+        const piAuthEnv = piAuth.env;
 
         const db = new Database(dbPath, { readonly: true });
 
@@ -681,7 +714,14 @@ export default function (mercury: {
         const dbPath = join(ctx.config.dataDir, "state.db");
         if (!existsSync(dbPath)) return;
 
-        const piAuthEnv = await resolvePiAuthEnv(ctx.config);
+        const piAuth = await resolvePiAuthEnv(ctx.config);
+        if (!piAuth.ok) {
+          ctx.log.error("Skipping consolidation: no Anthropic credential", {
+            reason: piAuth.reason,
+          });
+          return;
+        }
+        const piAuthEnv = piAuth.env;
 
         const db = new Database(dbPath, { readonly: true });
 
