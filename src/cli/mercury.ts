@@ -21,6 +21,7 @@ import { loadConfig, resolveProjectPath } from "../config.js";
 import { getCatalogEntryByName } from "../extensions/catalog.js";
 import {
   checkExtensionIndexLoads,
+  getGlobalDir,
   getProjectDataDir,
   getUserExtensionsDir,
   installExtensionFromDirectory,
@@ -474,8 +475,7 @@ function doctorAction(): void {
 
   // 4. AI credentials
   console.log("\nAI Credentials:");
-  const dataDir = getProjectDataDir(CWD);
-  const authPath = join(CWD, dataDir, "global", "auth.json");
+  const authPath = join(getGlobalDir(CWD), "auth.json");
   const hasOAuth = existsSync(authPath);
   const hasApiKey = !!(
     process.env.MERCURY_ANTHROPIC_API_KEY ||
@@ -601,7 +601,7 @@ function doctorAction(): void {
 
   // 8. Spaces exist
   console.log("\nSpaces:");
-  const dbPath = join(CWD, dataDir, "state.db");
+  const dbPath = join(CWD, getProjectDataDir(CWD), "state.db");
   if (existsSync(dbPath)) {
     try {
       const db = new Db(dbPath);
@@ -963,9 +963,31 @@ authCommand
     if (!provider) throw new Error(`Unknown provider: ${providerId}`);
     console.log(`\nLogging in to ${provider.name}...`);
 
-    // Resolve auth.json path
+    // Resolve auth.json path (honors MERCURY_GLOBAL_DIR from .env)
     const dataDir = getProjectDataDir(CWD);
-    const authPath = join(CWD, dataDir, "global", "auth.json");
+    const authPath = join(getGlobalDir(CWD), "auth.json");
+
+    // Credentials are CWD-scoped: a service running from another directory
+    // reads its own <project>/<dataDir>/global/auth.json and will never see
+    // tokens saved here. Warn before silently creating a stray .mercury tree.
+    // A bare data dir doesn't count as a project marker — a prior misplaced
+    // login creates exactly that; state.db only exists where Mercury has run.
+    const looksLikeMercuryProject =
+      existsSync(join(CWD, "mercury.yaml")) ||
+      existsSync(join(CWD, ".env")) ||
+      existsSync(join(CWD, dataDir, "state.db"));
+    if (!looksLikeMercuryProject) {
+      console.warn(
+        `\n⚠ ${CWD} does not look like a Mercury project (no mercury.yaml, .env, or ${dataDir}/state.db).`,
+      );
+      console.warn(
+        `  Credentials will be saved to ${authPath} — a Mercury service running from a different directory will NOT read them.`,
+      );
+      console.warn(
+        "  If you meant to re-authenticate a running service, re-run this command from that project's directory.",
+      );
+    }
+
     const authDir = dirname(authPath);
     if (!existsSync(authDir)) {
       mkdirSync(authDir, { recursive: true });
@@ -1069,8 +1091,7 @@ authCommand
   .command("logout [provider]")
   .description("Remove saved OAuth credentials for a provider")
   .action(async (providerArg?: string) => {
-    const dataDir = getProjectDataDir(CWD);
-    const authPath = join(CWD, dataDir, "global", "auth.json");
+    const authPath = join(getGlobalDir(CWD), "auth.json");
 
     if (!existsSync(authPath)) {
       console.log("No credentials found.");
@@ -1113,8 +1134,7 @@ authCommand
   .action(async () => {
     const { getOAuthProviders } = await import("@earendil-works/pi-ai/oauth");
 
-    const dataDir = getProjectDataDir(CWD);
-    const authPath = join(CWD, dataDir, "global", "auth.json");
+    const authPath = join(getGlobalDir(CWD), "auth.json");
 
     let authData: Record<string, { type?: string; expires?: number }> = {};
     if (existsSync(authPath)) {

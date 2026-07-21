@@ -96,7 +96,7 @@ export async function getPiAuthCredential(options: {
     return { status: "ok", apiKey: result.apiKey };
   } catch (error) {
     logger.warn(
-      "Failed to load anthropic oauth token from pi auth.json",
+      `Failed to load anthropic oauth token from pi auth.json at ${authPath}`,
       error instanceof Error ? error : undefined,
     );
     return {

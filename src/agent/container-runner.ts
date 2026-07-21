@@ -803,9 +803,11 @@ export class AgentContainerRunner {
           input.extraEnv?.ANTHROPIC_OAUTH_TOKEN,
       );
     if (!hasAnthropicKey && this.config.modelProvider === "anthropic") {
+      const resolvedAuthPath =
+        this.config.authPath ?? path.join(globalDir, "auth.json");
       const piAuth = await getPiAuthCredential({
         provider: this.config.modelProvider,
-        authPath: this.config.authPath ?? path.join(globalDir, "auth.json"),
+        authPath: resolvedAuthPath,
       });
       if (piAuth.status === "ok") {
         passthroughEnvPairs.push({
@@ -819,10 +821,11 @@ export class AgentContainerRunner {
         const detail = oauthBlobCorrupt
           ? "MERCURY_ANTHROPIC_OAUTH_TOKEN holds a corrupt credential blob — re-provision it or set MERCURY_ANTHROPIC_API_KEY"
           : piAuth.status === "refresh-failed"
-            ? "Anthropic OAuth refresh failed — re-authenticate on the host (mercury auth login) or set MERCURY_ANTHROPIC_API_KEY"
-            : "no Anthropic credential configured — run mercury auth login or set MERCURY_ANTHROPIC_API_KEY / MERCURY_ANTHROPIC_OAUTH_TOKEN";
+            ? `Anthropic OAuth refresh failed for ${resolvedAuthPath} — re-authenticate on the host (run mercury auth login from the project directory that owns that file) or set MERCURY_ANTHROPIC_API_KEY`
+            : `no Anthropic credential configured (checked ${resolvedAuthPath}) — run mercury auth login or set MERCURY_ANTHROPIC_API_KEY / MERCURY_ANTHROPIC_OAUTH_TOKEN`;
         logger.error(`Refusing to start container: ${detail}`, {
           spaceId: input.spaceId,
+          authPath: resolvedAuthPath,
         });
         throw ContainerError.noCredentials(input.spaceId, detail);
       }
