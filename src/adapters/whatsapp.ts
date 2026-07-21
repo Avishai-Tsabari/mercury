@@ -30,6 +30,7 @@ import {
 import { logger } from "../logger.js";
 import { normalizeChatMarkdown } from "../text/markdown.js";
 import { applyRtlDirection } from "../text/rtl.js";
+import { installLibsignalConsoleFilter } from "./whatsapp-console-filter.js";
 import {
   canonicalizeJidSync,
   resolveKeyIdentities,
@@ -220,6 +221,10 @@ export class WhatsAppBaileysAdapter
   }
 
   private async connect(): Promise<void> {
+    // libsignal (transitive via Baileys) writes session dumps — including
+    // private key material — straight to the global console, bypassing the
+    // silenced waLogger below. Filter before the socket exists.
+    installLibsignalConsoleFilter();
     fs.mkdirSync(this.authDir, { recursive: true });
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
     const { version } = await fetchLatestWaWebVersion({}).catch(() => ({
@@ -537,8 +542,8 @@ export class WhatsAppBaileysAdapter
     const sender = identities.sender.canonical;
     if (identities.sender.changed || identities.chat.changed) {
       logger.debug("WhatsApp identity canonicalized", {
-        sender: identities.sender,
-        chat: identities.chat,
+        sender: `${identities.sender.original} -> ${identities.sender.canonical}`,
+        chat: `${identities.chat.original} -> ${identities.chat.canonical}`,
       });
     }
     const senderName = msg.pushName || sender.split("@")[0] || "unknown";
