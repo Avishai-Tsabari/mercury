@@ -11,7 +11,10 @@ import {
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { getPiAuthCredential } from "mercury-agent/storage/pi-auth";
+import {
+  getPiAuthCredential,
+  parseOAuthTokenEnv,
+} from "mercury-agent/storage/pi-auth";
 
 const KNOWLEDGE_DIR = "knowledge";
 const VAULT_DIRS = ["people", "projects", "references", "daily", "episodes", "weekly", "monthly", "templates"];
@@ -422,10 +425,25 @@ export default function (mercury: {
     if (process.env.MERCURY_ANTHROPIC_API_KEY) {
       env.ANTHROPIC_API_KEY = process.env.MERCURY_ANTHROPIC_API_KEY;
     }
+    // Console-provisioned agents carry a JSON credential blob here, not a bare
+    // token — same handling as container-runner, via the shared parser.
+    let oauthBlobCorrupt = false;
     if (process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN) {
-      env.ANTHROPIC_API_KEY = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+      const parsed = parseOAuthTokenEnv(
+        process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN,
+      );
+      if (parsed.status === "token") {
+        env.ANTHROPIC_API_KEY = parsed.token;
+      } else if (parsed.status === "blob") {
+        env.ANTHROPIC_OAUTH_TOKEN = parsed.access;
+      } else if (parsed.status === "corrupt-blob") {
+        oauthBlobCorrupt = true;
+      }
+      // "empty" — whitespace-only value, treat as unset and fall through
     }
-    if (env.ANTHROPIC_API_KEY) return { ok: true, env };
+    if (env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN) {
+      return { ok: true, env };
+    }
 
     // Spawned pi inherits process.env, so an unprefixed host key also works.
     if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_OAUTH_TOKEN) {
@@ -450,8 +468,9 @@ export default function (mercury: {
 
     // Fail fast, mirroring the container-runner guard: without a credential
     // every pi spawn exits 1, one per space per pending date, every run.
-    const reason =
-      cred.status === "refresh-failed"
+    const reason = oauthBlobCorrupt
+      ? "MERCURY_ANTHROPIC_OAUTH_TOKEN holds a corrupt credential blob — re-provision it or set MERCURY_ANTHROPIC_API_KEY"
+      : cred.status === "refresh-failed"
         ? `Anthropic OAuth refresh failed for ${authPath} — re-authenticate on the host (run mercury auth login from the project directory that owns that file) or set MERCURY_ANTHROPIC_API_KEY`
         : `no Anthropic credential configured (checked ${authPath}) — run mercury auth login or set MERCURY_ANTHROPIC_API_KEY / MERCURY_ANTHROPIC_OAUTH_TOKEN`;
     return { ok: false, reason };

@@ -2,7 +2,58 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { getPiAuthCredential } from "../src/storage/pi-auth.js";
+import {
+  getPiAuthCredential,
+  parseOAuthTokenEnv,
+} from "../src/storage/pi-auth.js";
+
+describe("parseOAuthTokenEnv", () => {
+  test("returns a bare token as-is", () => {
+    expect(parseOAuthTokenEnv("sk-ant-oat01-abc")).toEqual({
+      status: "token",
+      token: "sk-ant-oat01-abc",
+    });
+  });
+
+  test("trims surrounding whitespace from a bare token", () => {
+    expect(parseOAuthTokenEnv("  sk-ant-oat01-abc\n")).toEqual({
+      status: "token",
+      token: "sk-ant-oat01-abc",
+    });
+  });
+
+  test("extracts the access token from a credential blob", () => {
+    const blob = JSON.stringify({
+      access: "sk-ant-oat01-abc",
+      refresh: "sk-ant-ort01-def",
+      expires: 123,
+    });
+    expect(parseOAuthTokenEnv(blob)).toEqual({
+      status: "blob",
+      access: "sk-ant-oat01-abc",
+    });
+  });
+
+  test("flags invalid JSON that looks like a blob as corrupt", () => {
+    expect(parseOAuthTokenEnv('{"access": broken')).toEqual({
+      status: "corrupt-blob",
+    });
+  });
+
+  test("treats whitespace-only input as unset", () => {
+    expect(parseOAuthTokenEnv("")).toEqual({ status: "empty" });
+    expect(parseOAuthTokenEnv("  \n")).toEqual({ status: "empty" });
+  });
+
+  test("flags a blob without a usable access token as corrupt", () => {
+    expect(parseOAuthTokenEnv('{"refresh":"r"}')).toEqual({
+      status: "corrupt-blob",
+    });
+    expect(parseOAuthTokenEnv('{"access":""}')).toEqual({
+      status: "corrupt-blob",
+    });
+  });
+});
 
 describe("getPiAuthCredential", () => {
   let dir: string;

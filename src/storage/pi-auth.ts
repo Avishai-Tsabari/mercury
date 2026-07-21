@@ -33,6 +33,34 @@ function writeAuthFile(authPath: string, auth: AuthFile): void {
   fs.chmodSync(authPath, 0o600);
 }
 
+export type OAuthTokenEnvValue =
+  | { status: "token"; token: string }
+  | { status: "blob"; access: string }
+  | { status: "corrupt-blob" }
+  /** Whitespace-only value — treat the variable as unset. */
+  | { status: "empty" };
+
+/**
+ * Interpret the raw value of MERCURY_ANTHROPIC_OAUTH_TOKEN. Console-provisioned
+ * agents receive a full credential blob ({"access":"...","refresh":"...",
+ * "expires":...}) rather than a bare token, so any code spawning pi on the host
+ * must extract the access token instead of passing the value through verbatim.
+ */
+export function parseOAuthTokenEnv(raw: string): OAuthTokenEnvValue {
+  const trimmed = raw.trim();
+  if (!trimmed) return { status: "empty" };
+  if (!trimmed.startsWith("{")) return { status: "token", token: trimmed };
+  try {
+    const blob = JSON.parse(trimmed) as { access?: unknown };
+    if (typeof blob.access === "string" && blob.access) {
+      return { status: "blob", access: blob.access };
+    }
+  } catch {
+    // fall through to corrupt-blob
+  }
+  return { status: "corrupt-blob" };
+}
+
 export type PiAuthCredential =
   | { status: "ok"; apiKey: string }
   /** No usable oauth entry (or an env override takes precedence). */
