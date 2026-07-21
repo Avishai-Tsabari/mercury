@@ -33,19 +33,26 @@ function writeAuthFile(authPath: string, auth: AuthFile): void {
   fs.chmodSync(authPath, 0o600);
 }
 
-export async function getApiKeyFromPiAuthFile(options: {
+export type PiAuthCredential =
+  | { status: "ok"; apiKey: string }
+  /** No usable oauth entry (or an env override takes precedence). */
+  | { status: "none" }
+  /** An oauth entry exists but could not be turned into a usable key. */
+  | { status: "refresh-failed"; error?: Error };
+
+export async function getPiAuthCredential(options: {
   provider: string;
   authPath: string;
-}): Promise<string | undefined> {
+}): Promise<PiAuthCredential> {
   if (
     process.env.MERCURY_ANTHROPIC_API_KEY ||
     process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN
   ) {
-    return undefined;
+    return { status: "none" };
   }
 
   if (options.provider !== "anthropic") {
-    return undefined;
+    return { status: "none" };
   }
 
   const authPath = options.authPath;
@@ -53,13 +60,15 @@ export async function getApiKeyFromPiAuthFile(options: {
 
   const entry = auth.anthropic;
   if (!entry || typeof entry !== "object" || entry.type !== "oauth") {
-    return undefined;
+    return { status: "none" };
   }
 
   const access = typeof entry.access === "string" ? entry.access : undefined;
   const refresh = typeof entry.refresh === "string" ? entry.refresh : undefined;
   const expires = typeof entry.expires === "number" ? entry.expires : undefined;
-  if (!access || !refresh || typeof expires !== "number") return undefined;
+  if (!access || !refresh || typeof expires !== "number") {
+    return { status: "none" };
+  }
 
   try {
     const result = await getOAuthApiKey("anthropic" satisfies OAuthProviderId, {
@@ -70,7 +79,7 @@ export async function getApiKeyFromPiAuthFile(options: {
       },
     });
 
-    if (!result) return undefined;
+    if (!result) return { status: "refresh-failed" };
 
     const nextAuth = {
       ...auth,
@@ -84,12 +93,24 @@ export async function getApiKeyFromPiAuthFile(options: {
     logger.debug("Loaded anthropic oauth token from pi auth.json", {
       authPath,
     });
-    return result.apiKey;
+    return { status: "ok", apiKey: result.apiKey };
   } catch (error) {
     logger.warn(
       "Failed to load anthropic oauth token from pi auth.json",
       error instanceof Error ? error : undefined,
     );
-    return undefined;
+    return {
+      status: "refresh-failed",
+      error: error instanceof Error ? error : undefined,
+    };
   }
+}
+
+/** Back-compat wrapper: returns the key on success, undefined otherwise. */
+export async function getApiKeyFromPiAuthFile(options: {
+  provider: string;
+  authPath: string;
+}): Promise<string | undefined> {
+  const result = await getPiAuthCredential(options);
+  return result.status === "ok" ? result.apiKey : undefined;
 }

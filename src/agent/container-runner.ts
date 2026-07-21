@@ -8,7 +8,7 @@ import { mintCallerToken } from "../core/caller-token.js";
 import { scanOutbox } from "../core/outbox.js";
 import type { ExtImageBuildState } from "../extensions/image-builder.js";
 import { type Logger, logger } from "../logger.js";
-import { getApiKeyFromPiAuthFile } from "../storage/pi-auth.js";
+import { getPiAuthCredential } from "../storage/pi-auth.js";
 import type {
   ContainerResult,
   MessageAttachment,
@@ -677,11 +677,6 @@ export class AgentContainerRunner {
       );
     }
 
-    const authFromPi = await getApiKeyFromPiAuthFile({
-      provider: this.config.modelProvider,
-      authPath: this.config.authPath ?? path.join(globalDir, "auth.json"),
-    });
-
     // Env vars that should never be passed to containers
     const BLOCKED_ENV_VARS = new Set([
       "MERCURY_API_SECRET",
@@ -762,6 +757,7 @@ export class AgentContainerRunner {
         p.key === "ANTHROPIC_OAUTH_TOKEN" &&
         p.value.trimStart().startsWith("{"),
     );
+    let oauthBlobCorrupt = false;
     if (anthOauthIdx !== -1) {
       const raw = passthroughEnvPairs[anthOauthIdx]?.value ?? "";
       passthroughEnvPairs.splice(anthOauthIdx, 1);
@@ -769,6 +765,7 @@ export class AgentContainerRunner {
       try {
         parsedCreds = JSON.parse(raw) as AnthropicOAuthCreds;
       } catch {
+        oauthBlobCorrupt = true;
         logger.warn("Anthropic OAuth blob corrupt; skipping token injection");
       }
       if (parsedCreds) {
@@ -794,18 +791,41 @@ export class AgentContainerRunner {
     }
 
     // Check for pi auth file fallback for Anthropic
-    const hasAnthropicKey = passthroughEnvPairs.some(
-      (p) => p.key === "ANTHROPIC_API_KEY" || p.key === "ANTHROPIC_OAUTH_TOKEN",
-    );
-    if (
-      !hasAnthropicKey &&
-      this.config.modelProvider === "anthropic" &&
-      authFromPi
-    ) {
-      passthroughEnvPairs.push({
-        key: "ANTHROPIC_OAUTH_TOKEN",
-        value: authFromPi,
+    const hasAnthropicKey =
+      passthroughEnvPairs.some(
+        (p) =>
+          (p.key === "ANTHROPIC_API_KEY" ||
+            p.key === "ANTHROPIC_OAUTH_TOKEN") &&
+          p.value,
+      ) ||
+      Boolean(
+        input.extraEnv?.ANTHROPIC_API_KEY ||
+          input.extraEnv?.ANTHROPIC_OAUTH_TOKEN,
+      );
+    if (!hasAnthropicKey && this.config.modelProvider === "anthropic") {
+      const piAuth = await getPiAuthCredential({
+        provider: this.config.modelProvider,
+        authPath: this.config.authPath ?? path.join(globalDir, "auth.json"),
       });
+      if (piAuth.status === "ok") {
+        passthroughEnvPairs.push({
+          key: "ANTHROPIC_OAUTH_TOKEN",
+          value: piAuth.apiKey,
+        });
+      } else {
+        // Fail fast: without a credential, pi inside the container exits 1
+        // ("No API key found for anthropic") after a full container start,
+        // and the user gets a misleading "try again" message.
+        const detail = oauthBlobCorrupt
+          ? "MERCURY_ANTHROPIC_OAUTH_TOKEN holds a corrupt credential blob — re-provision it or set MERCURY_ANTHROPIC_API_KEY"
+          : piAuth.status === "refresh-failed"
+            ? "Anthropic OAuth refresh failed — re-authenticate on the host (mercury auth login) or set MERCURY_ANTHROPIC_API_KEY"
+            : "no Anthropic credential configured — run mercury auth login or set MERCURY_ANTHROPIC_API_KEY / MERCURY_ANTHROPIC_OAUTH_TOKEN";
+        logger.error(`Refusing to start container: ${detail}`, {
+          spaceId: input.spaceId,
+        });
+        throw ContainerError.noCredentials(input.spaceId, detail);
+      }
     }
 
     const envPairs = [

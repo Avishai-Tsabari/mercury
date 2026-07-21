@@ -7,7 +7,7 @@ export type UserErrorCategory =
   | "generic";
 
 const AUTH_RE =
-  /\b401\b|\b403\b|invalid\s+api\s+key|incorrect\s+api\s+key|authentication\s+failed|invalid\s+authentication|unauthorized|access\s+denied/i;
+  /\b401\b|\b403\b|invalid\s+api\s+key|incorrect\s+api\s+key|no\s+api\s+key\s+found|authentication\s+failed|invalid\s+authentication|unauthorized|access\s+denied/i;
 
 const KEY_LIMIT_RE = /quota|billing|usage\s+limit|spending\s+limit/i;
 

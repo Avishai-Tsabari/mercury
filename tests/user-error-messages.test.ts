@@ -10,6 +10,11 @@ describe("classifyUserError", () => {
     expect(classifyUserError("invalid api key")).toBe("auth");
     expect(classifyUserError("403 Forbidden: access denied")).toBe("auth");
     expect(classifyUserError("authentication failed")).toBe("auth");
+    expect(
+      classifyUserError(
+        "Container failed (exit code 1): Error: pi CLI failed (1): No API key found for anthropic.",
+      ),
+    ).toBe("auth");
   });
 
   test("key-limit errors", () => {

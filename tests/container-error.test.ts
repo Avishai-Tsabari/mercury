@@ -38,6 +38,18 @@ describe("ContainerError", () => {
     expect(err.message.length).toBeLessThan(600);
   });
 
+  test("noCredentials creates correct error", () => {
+    const err = ContainerError.noCredentials(
+      "space-1",
+      "Anthropic OAuth refresh failed",
+    );
+    expect(err.reason).toBe("no-credentials");
+    expect(err.exitCode).toBeNull();
+    expect(err.message).toContain("space-1");
+    expect(err.message).toContain("Refusing to start container");
+    expect(err.message).toContain("OAuth refresh failed");
+  });
+
   test("ContainerError is instanceof Error", () => {
     const err = ContainerError.timeout("test");
     expect(err).toBeInstanceOf(Error);

@@ -1,4 +1,9 @@
-export type ContainerFailureReason = "timeout" | "oom" | "aborted" | "error";
+export type ContainerFailureReason =
+  | "timeout"
+  | "oom"
+  | "aborted"
+  | "error"
+  | "no-credentials";
 
 export class ContainerError extends Error {
   readonly reason: ContainerFailureReason;
@@ -36,6 +41,14 @@ export class ContainerError extends Error {
       "aborted",
       null,
       `Container aborted for group ${groupId}`,
+    );
+  }
+
+  static noCredentials(spaceId: string, detail: string): ContainerError {
+    return new ContainerError(
+      "no-credentials",
+      null,
+      `Refusing to start container for space ${spaceId}: ${detail}`,
     );
   }
 

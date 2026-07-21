@@ -641,6 +641,19 @@ export class MercuryCoreRuntime {
               type: "denied",
               reason: "Container was killed (possibly out of memory).",
             };
+          case "no-credentials": {
+            // Host refused to start the container (no model credential).
+            // Auth-category message: "try again" would be misleading here.
+            logger.error("Container start refused: no model credentials", {
+              detail: error.message,
+            });
+            const reason = friendlyErrorMessage(
+              "auth",
+              this.config.apiKeyMode,
+              this.config.consoleUrl,
+            );
+            return { type: "denied", reason };
+          }
           case "error": {
             logger.error(
               "Container error",
