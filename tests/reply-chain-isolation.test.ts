@@ -68,10 +68,18 @@ describe("Reply-chain isolation", () => {
     runtime.db.setRole("g1", "admin1", "admin", "test");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     runtime.rateLimiter.stopCleanup();
     runtime.db.close();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    // Windows: SQLite handles release asynchronously — retry cleanup on EBUSY
+    for (let i = 0; i < 5; i++) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }
   });
 
   test("strips <reply_to> from prompt for unprivileged group reply-to-bot", async () => {
@@ -198,6 +206,44 @@ describe("Reply-chain isolation", () => {
       "chat-sdk",
     );
 
+    expect(lastReplyPayload.extraEnv?.MERCURY_REPLY_ISOLATED).toBeUndefined();
+  });
+
+  test("does NOT isolate unprivileged reply to a bot message recorded in this conversation", async () => {
+    // The bot posted this message publicly in conversation "c1" — record its
+    // platform message id so lookupMercuryMessageId can resolve it.
+    const botMsgId = runtime.db.addMessage(
+      "g1",
+      "assistant",
+      "public bot answer everyone in the group saw",
+    );
+    runtime.db.addPlatformMessageId(botMsgId, "test", "c1", "botmsg1");
+
+    const promptWithReply =
+      'follow up question\n<reply_to from_bot="true">\npublic bot answer everyone in the group saw\n</reply_to>';
+
+    await runtime.handleRawInput(
+      {
+        platform: "test",
+        spaceId: "g1",
+        conversationExternalId: "c1",
+        callerId: "member1",
+        text: promptWithReply,
+        isDM: false,
+        isReplyToBot: true,
+        replyToPlatformMessageId: "botmsg1",
+        attachments: [],
+      },
+      "chat-sdk",
+    );
+
+    // The quote is in-conversation and already visible to the member, so
+    // isolation must NOT fire: the <reply_to> block is preserved and no
+    // isolation env flag is set.
+    expect(lastReplyPayload.prompt).toContain("<reply_to");
+    expect(lastReplyPayload.prompt).toContain(
+      "public bot answer everyone in the group saw",
+    );
     expect(lastReplyPayload.extraEnv?.MERCURY_REPLY_ISOLATED).toBeUndefined();
   });
 });

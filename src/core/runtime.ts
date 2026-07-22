@@ -1288,12 +1288,43 @@ export class MercuryCoreRuntime {
       // Container-relative workspace path
       const containerWorkspace = `/spaces/${spaceId}`;
 
+      // Resolve the reply target once — reused for isolation, context assembly,
+      // and DB linkage. Non-null only when the quoted platform message is
+      // recorded in THIS conversation's history (keyed by platform +
+      // conversation + platform message id).
+      let replyMercuryMsgId: number | null = null;
+      if (
+        replyMeta?.replyToPlatformMessageId &&
+        replyMeta.platform &&
+        replyMeta.conversationExternalId
+      ) {
+        replyMercuryMsgId = this.db.lookupMercuryMessageId(
+          replyMeta.platform,
+          replyMeta.conversationExternalId,
+          replyMeta.replyToPlatformMessageId,
+        );
+      }
+      const userReplyToId = replyMercuryMsgId ?? undefined;
+
       // ── Reply-chain isolation ──────────────────────────────────────────
       // Strip quoted bot output from unprivileged group replies-to-bot
       // BEFORE hooks see the prompt (defense in depth).
+      //
+      // Only isolate when the quoted message is NOT recorded in this
+      // conversation's own history (replyMercuryMsgId === null). A recorded
+      // match means the bot posted it publicly in this same conversation and
+      // the member has already seen it — there is nothing to protect, so
+      // isolating would only strip legitimate context. A miss means the quote
+      // originated elsewhere (a DM, another space, or unverifiable content) —
+      // keep isolating. Fail-safe: if outbound recording ever missed the
+      // message, the lookup returns null and isolation still fires.
       let replyIsolated = false;
       let finalPrompt = prompt;
-      if (replyFlags?.isReplyToBot && !replyFlags.isDM) {
+      if (
+        replyFlags?.isReplyToBot &&
+        !replyFlags.isDM &&
+        replyMercuryMsgId === null
+      ) {
         const seededAdmins = this.config.admins
           ? this.config.admins
               .split(",")
@@ -1392,21 +1423,6 @@ export class MercuryCoreRuntime {
             : spacePrompt,
         };
       }
-
-      // Resolve reply target once — reused for context assembly and DB linkage.
-      let replyMercuryMsgId: number | null = null;
-      if (
-        replyMeta?.replyToPlatformMessageId &&
-        replyMeta.platform &&
-        replyMeta.conversationExternalId
-      ) {
-        replyMercuryMsgId = this.db.lookupMercuryMessageId(
-          replyMeta.platform,
-          replyMeta.conversationExternalId,
-          replyMeta.replyToPlatformMessageId,
-        );
-      }
-      const userReplyToId = replyMercuryMsgId ?? undefined;
 
       const replyChainDepthStr = this.db.getSpaceConfig(
         spaceId,
