@@ -68,6 +68,10 @@ export type PiAuthCredential =
   /** An oauth entry exists but could not be turned into a usable key. */
   | { status: "refresh-failed"; error?: Error };
 
+// Deduplicate concurrent OAuth refreshes — refresh tokens are single-use, so
+// two parallel calls with the same token race and one always fails.
+const inflightRefresh = new Map<string, Promise<PiAuthCredential>>();
+
 export async function getPiAuthCredential(options: {
   provider: string;
   authPath: string;
@@ -83,6 +87,25 @@ export async function getPiAuthCredential(options: {
     return { status: "none" };
   }
 
+  // Coalesce concurrent refreshes for the same auth file so only one
+  // token-endpoint call is made; the rest share its result.
+  const key = options.authPath;
+  const existing = inflightRefresh.get(key);
+  if (existing) return existing;
+
+  const promise = doGetPiAuthCredential(options);
+  inflightRefresh.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inflightRefresh.delete(key);
+  }
+}
+
+async function doGetPiAuthCredential(options: {
+  provider: string;
+  authPath: string;
+}): Promise<PiAuthCredential> {
   const authPath = options.authPath;
   const auth = readAuthFile(authPath);
 

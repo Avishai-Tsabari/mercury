@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -137,5 +137,85 @@ describe("getPiAuthCredential", () => {
       authPath,
     });
     expect(result.status).toBe("none");
+  });
+});
+
+describe("getPiAuthCredential — concurrent refresh coalescing", () => {
+  let dir: string;
+  let authPath: string;
+  const savedApiKey = process.env.MERCURY_ANTHROPIC_API_KEY;
+  const savedOauth = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-auth-coalesce-"));
+    authPath = path.join(dir, "auth.json");
+    delete process.env.MERCURY_ANTHROPIC_API_KEY;
+    delete process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+    fs.writeFileSync(
+      authPath,
+      JSON.stringify({
+        anthropic: { type: "oauth", access: "a", refresh: "r", expires: 0 },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    mock.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (savedApiKey !== undefined)
+      process.env.MERCURY_ANTHROPIC_API_KEY = savedApiKey;
+    else delete process.env.MERCURY_ANTHROPIC_API_KEY;
+    if (savedOauth !== undefined)
+      process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN = savedOauth;
+    else delete process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+  });
+
+  test("two concurrent calls trigger one endpoint call and share the result", async () => {
+    let calls = 0;
+    mock.module("@earendil-works/pi-ai/oauth", () => ({
+      getOAuthApiKey: async () => {
+        calls++;
+        // Delay so the second call overlaps the first's in-flight window.
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          apiKey: "sk-fresh",
+          newCredentials: { access: "a2", refresh: "r2", expires: 999 },
+        };
+      },
+    }));
+    // Re-import after mocking so the module binds the stubbed dependency.
+    const { getPiAuthCredential: freshGet } = await import(
+      "../src/storage/pi-auth.js"
+    );
+
+    const [a, b] = await Promise.all([
+      freshGet({ provider: "anthropic", authPath }),
+      freshGet({ provider: "anthropic", authPath }),
+    ]);
+
+    expect(calls).toBe(1);
+    expect(a).toEqual({ status: "ok", apiKey: "sk-fresh" });
+    expect(b).toEqual({ status: "ok", apiKey: "sk-fresh" });
+  });
+
+  test("a call after the window resolves refreshes again", async () => {
+    let calls = 0;
+    mock.module("@earendil-works/pi-ai/oauth", () => ({
+      getOAuthApiKey: async () => {
+        calls++;
+        return {
+          apiKey: `sk-${calls}`,
+          newCredentials: { access: "a", refresh: "r", expires: 0 },
+        };
+      },
+    }));
+    const { getPiAuthCredential: freshGet } = await import(
+      "../src/storage/pi-auth.js"
+    );
+
+    await freshGet({ provider: "anthropic", authPath });
+    await freshGet({ provider: "anthropic", authPath });
+
+    expect(calls).toBe(2);
   });
 });
