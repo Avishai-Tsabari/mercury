@@ -1,12 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import {
   computeImageHash,
+  type DockerRun,
   generateDockerfile,
   mergeInstalls,
   parseInstallCommand,
+  pruneBuildCache,
+  pruneStaleExtImages,
   toRunStatements,
 } from "../src/extensions/image-builder.js";
 import type { ExtensionMeta } from "../src/extensions/types.js";
+import type { Logger } from "../src/logger.js";
 
 /** Stable fake base image id for hash unit tests */
 const TEST_BASE_ID =
@@ -608,5 +612,223 @@ describe("computeImageHash", () => {
     expect(computeImageHash("base:latest", TEST_BASE_ID, e1)).toBe(
       computeImageHash("base:latest", TEST_BASE_ID, e2),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prune helpers (Docker disk hygiene)
+// ---------------------------------------------------------------------------
+
+/** Capturing fake logger satisfying the Logger interface. */
+function makeFakeLogger(): {
+  logger: Logger;
+  infos: string[];
+  warns: string[];
+  debugs: string[];
+} {
+  const infos: string[] = [];
+  const warns: string[] = [];
+  const debugs: string[] = [];
+  const logger: Logger = {
+    level: "info",
+    debug: (m: string) => debugs.push(m),
+    info: (m: string) => infos.push(m),
+    warn: (m: string) => warns.push(m),
+    error: () => {},
+    child: () => logger,
+  };
+  return { logger, infos, warns, debugs };
+}
+
+/** A scripted docker invocation: matcher on the joined args → behaviour. */
+type Script = {
+  match: (args: string[]) => boolean;
+  out?: string;
+  throws?: string;
+};
+
+/**
+ * Build a fake DockerRun from an ordered script. Each call consumes the first
+ * matching entry; unmatched calls throw so tests notice unexpected commands.
+ * Records every invocation's args for assertions.
+ */
+function scriptedRun(scripts: Script[]): { run: DockerRun; calls: string[][] } {
+  const calls: string[][] = [];
+  const run: DockerRun = (args) => {
+    calls.push(args);
+    const s = scripts.find((x) => x.match(args));
+    if (!s) throw new Error(`unexpected docker call: ${args.join(" ")}`);
+    if (s.throws) throw new Error(s.throws);
+    return s.out ?? "";
+  };
+  return { run, calls };
+}
+
+const argsHave =
+  (...needles: string[]) =>
+  (args: string[]) =>
+    needles.every((n) => args.includes(n));
+
+describe("pruneStaleExtImages", () => {
+  const REPO = "mercury-agent-ext-t";
+
+  it("removes a stale image directly when nothing pins it", () => {
+    const { logger, infos, warns } = makeFakeLogger();
+    const { run, calls } = scriptedRun([
+      { match: argsHave("images", REPO), out: "keepme\nstale1\n" },
+      { match: argsHave("rmi", `${REPO}:stale1`), out: "" },
+    ]);
+
+    pruneStaleExtImages("keepme", REPO, logger, run);
+
+    // keepme is skipped; stale1 rmi'd; no container listing needed.
+    expect(calls.some((c) => c.includes("keepme") && c.includes("rmi"))).toBe(
+      false,
+    );
+    expect(calls.some((c) => c.includes("ps"))).toBe(false);
+    expect(infos.some((m) => m.includes(`${REPO}:stale1`))).toBe(true);
+    expect(warns).toHaveLength(0);
+  });
+
+  it("reaps stopped containers then retries when the image is pinned", () => {
+    const { logger, infos, warns } = makeFakeLogger();
+    let rmiAttempts = 0;
+    const run: DockerRun = (args) => {
+      if (argsHave("images", REPO)(args)) return "keepme\nstale1\n";
+      if (argsHave("rmi", `${REPO}:stale1`)(args)) {
+        rmiAttempts++;
+        if (rmiAttempts === 1)
+          throw new Error("image is being used by container");
+        return ""; // second attempt (after reap) succeeds
+      }
+      if (argsHave("ps", "-aq")(args)) return "cont1\ncont2\n";
+      if (argsHave("rm", "cont1", "cont2")(args)) return "";
+      throw new Error(`unexpected: ${args.join(" ")}`);
+    };
+
+    pruneStaleExtImages("keepme", REPO, logger, run);
+
+    expect(rmiAttempts).toBe(2);
+    expect(
+      infos.some((m) => m.includes("after reaping 2 stopped container")),
+    ).toBe(true);
+    expect(warns).toHaveLength(0);
+  });
+
+  it("warns (not silent) when a running container still pins the image", () => {
+    const { logger, warns } = makeFakeLogger();
+    const run: DockerRun = (args) => {
+      if (argsHave("images", REPO)(args)) return "stale1\n";
+      if (argsHave("rmi", `${REPO}:stale1`)(args))
+        throw new Error("image is being used by running container");
+      if (argsHave("ps", "-aq")(args)) return "running1\n";
+      if (argsHave("rm", "running1")(args))
+        throw new Error("cannot remove a running container"); // rm no -f fails
+      throw new Error(`unexpected: ${args.join(" ")}`);
+    };
+
+    // Must not throw — the failure is logged, not propagated.
+    pruneStaleExtImages("keepme", REPO, logger, run);
+
+    expect(
+      warns.some((m) => m.includes("Could not prune stale ext image")),
+    ).toBe(true);
+  });
+
+  it("warns and bails when it can't even list images", () => {
+    const { logger, warns } = makeFakeLogger();
+    const run: DockerRun = () => {
+      throw new Error("docker daemon not reachable");
+    };
+    pruneStaleExtImages("keepme", REPO, logger, run);
+    expect(warns.some((m) => m.includes("Could not list ext images"))).toBe(
+      true,
+    );
+  });
+});
+
+describe("pruneBuildCache", () => {
+  const ENV_KEY = "MERCURY_BUILD_CACHE_RESERVED";
+
+  function withEnv(value: string | undefined, fn: () => void) {
+    const prev = process.env[ENV_KEY];
+    if (value === undefined) delete process.env[ENV_KEY];
+    else process.env[ENV_KEY] = value;
+    try {
+      fn();
+    } finally {
+      if (prev === undefined) delete process.env[ENV_KEY];
+      else process.env[ENV_KEY] = prev;
+    }
+  }
+
+  it("prunes with the modern --reserved-space flag and default size", () => {
+    withEnv(undefined, () => {
+      const { logger, infos } = makeFakeLogger();
+      const { run, calls } = scriptedRun([
+        {
+          match: argsHave("builder", "prune", "--reserved-space=10GB"),
+          out: "",
+        },
+      ]);
+      pruneBuildCache(logger, run);
+      expect(calls).toHaveLength(1);
+      expect(infos.some((m) => m.includes("reserved-space=10GB"))).toBe(true);
+    });
+  });
+
+  it("honours a configured reserved size", () => {
+    withEnv("25GB", () => {
+      const { logger, infos } = makeFakeLogger();
+      const { run } = scriptedRun([
+        {
+          match: argsHave("builder", "prune", "--reserved-space=25GB"),
+          out: "",
+        },
+      ]);
+      pruneBuildCache(logger, run);
+      expect(infos.some((m) => m.includes("reserved-space=25GB"))).toBe(true);
+    });
+  });
+
+  it("falls back to legacy --keep-storage when --reserved-space is unknown", () => {
+    withEnv(undefined, () => {
+      const { logger, infos } = makeFakeLogger();
+      const run: DockerRun = (args) => {
+        if (args.includes("--reserved-space=10GB"))
+          throw new Error("unknown flag: --reserved-space");
+        if (args.includes("--keep-storage=10GB")) return "";
+        throw new Error(`unexpected: ${args.join(" ")}`);
+      };
+      pruneBuildCache(logger, run);
+      expect(infos.some((m) => m.includes("keep-storage=10GB"))).toBe(true);
+    });
+  });
+
+  it("does not fall back on a non-flag error; warns instead", () => {
+    withEnv(undefined, () => {
+      const { logger, warns } = makeFakeLogger();
+      const calls: string[][] = [];
+      const run: DockerRun = (args) => {
+        calls.push(args);
+        throw new Error("failed to prune: daemon error");
+      };
+      pruneBuildCache(logger, run);
+      // Only the modern flag was attempted (no legacy fallback on real errors).
+      expect(calls).toHaveLength(1);
+      expect(warns.some((m) => m.includes("Could not prune build cache"))).toBe(
+        true,
+      );
+    });
+  });
+
+  it("is disabled when set to 'off'", () => {
+    withEnv("off", () => {
+      const { logger, debugs } = makeFakeLogger();
+      const { run, calls } = scriptedRun([]);
+      pruneBuildCache(logger, run);
+      expect(calls).toHaveLength(0);
+      expect(debugs.some((m) => m.includes("disabled"))).toBe(true);
+    });
   });
 });

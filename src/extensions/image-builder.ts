@@ -416,41 +416,147 @@ function extImageRepo(agentId: string | undefined): string {
 }
 
 /**
- * Remove all derived images for this agent except the one with `keepHash`.
- * Images still in use by a running container are skipped silently.
+ * Runs a `docker` subcommand and returns stdout. Throws on non-zero exit,
+ * with the error message carrying the tail of stderr for diagnosis.
+ *
+ * Injected into the prune helpers so their logic (container reaping, flag
+ * fallback, failure logging) is unit-testable without a real Docker daemon.
  */
-function pruneStaleExtImages(
+export type DockerRun = (args: string[], timeoutMs?: number) => string;
+
+const realDockerRun: DockerRun = (args, timeoutMs = 30_000) => {
+  try {
+    return execFileSync("docker", args, {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch (err) {
+    // execFileSync throws an Error with `.stderr` populated (we piped it).
+    // Fold stderr into the message so callers logging `err.message` see why.
+    const stderr =
+      err && typeof err === "object" && "stderr" in err
+        ? String((err as { stderr: unknown }).stderr ?? "").trim()
+        : "";
+    const base = err instanceof Error ? err.message : String(err);
+    throw new Error(stderr ? `${base}: ${stderr}` : base);
+  }
+};
+
+const errMsg = (err: unknown): string =>
+  err instanceof Error ? err.message : String(err);
+
+/**
+ * Remove all derived images for this agent except the one with `keepHash`.
+ *
+ * A stale image can be pinned by a leftover *stopped* container (e.g. one that
+ * survived an abnormal exit where `--rm` never reaped it). When the first
+ * `docker rmi` fails we remove the stopped containers referencing that image
+ * (plain `docker rm`, which never touches a *running* container) and retry.
+ * If the image is still pinned — a container is genuinely running on it — we
+ * `log.warn` and move on rather than swallowing the failure silently, so the
+ * accumulation is visible in logs.
+ */
+export function pruneStaleExtImages(
   keepHash: string,
   repo: string,
   log: Logger,
+  run: DockerRun = realDockerRun,
 ): void {
+  let tags: string[];
   try {
-    const out = execFileSync(
-      "docker",
-      ["images", repo, "--format", "{{.Tag}}"],
-      { encoding: "utf8", timeout: 30_000 },
-    );
-    const tags = out
+    const out = run(["images", repo, "--format", "{{.Tag}}"]);
+    tags = out
       .split("\n")
       .map((t) => t.trim())
       .filter((t) => t && t !== "<none>");
-    for (const tag of tags) {
-      if (tag === keepHash) continue;
-      try {
-        execFileSync("docker", ["rmi", `${repo}:${tag}`], {
-          encoding: "utf8",
-          timeout: 30_000,
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        log.info(`Pruned stale ext image ${repo}:${tag}`);
-      } catch {
-        // Image still in use by a container — skip silently
-      }
-    }
   } catch (err) {
-    log.warn(
-      `Could not list ext images for pruning: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    log.warn(`Could not list ext images for pruning: ${errMsg(err)}`);
+    return;
+  }
+
+  for (const tag of tags) {
+    if (tag === keepHash) continue;
+    const image = `${repo}:${tag}`;
+    try {
+      run(["rmi", image]);
+      log.info(`Pruned stale ext image ${image}`);
+      continue;
+    } catch {
+      // Likely pinned by a leftover container — reap stopped ones and retry.
+    }
+    try {
+      const ids = run(["ps", "-aq", "--filter", `ancestor=${image}`])
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ids.length > 0) {
+        // Plain `rm` (no -f): removes stopped containers, errors on running
+        // ones without killing them. Best-effort — ignore its failure and
+        // let the retry `rmi` be the source of truth.
+        try {
+          run(["rm", ...ids]);
+        } catch {
+          // Some referenced container is still running; it stays alive.
+        }
+      }
+      run(["rmi", image]);
+      log.info(
+        `Pruned stale ext image ${image} (after reaping ${ids.length} stopped container(s))`,
+      );
+    } catch (err) {
+      log.warn(
+        `Could not prune stale ext image ${image} (still referenced by a running container?): ${errMsg(err)}`,
+      );
+    }
+  }
+}
+
+/** Default BuildKit cache size to retain after a successful build. */
+const DEFAULT_BUILD_CACHE_RESERVED = "10GB";
+
+/**
+ * Bound the BuildKit build cache after a successful build so it doesn't grow
+ * without limit (observed reaching 27 GB in the field). Best-effort and
+ * non-fatal: any failure is logged and the build result is unaffected.
+ *
+ * Retained size is configurable via `MERCURY_BUILD_CACHE_RESERVED` (a docker
+ * size string like `10GB`); set it to `off`/`0` to disable pruning entirely.
+ *
+ * Docker renamed the retention flag: modern Docker (buildx) uses
+ * `--reserved-space`, older releases used `--keep-storage`. We try the modern
+ * flag first and fall back to the legacy one if it's unrecognised.
+ */
+export function pruneBuildCache(
+  log: Logger,
+  run: DockerRun = realDockerRun,
+): void {
+  const configured = process.env.MERCURY_BUILD_CACHE_RESERVED?.trim();
+  const reserved = configured || DEFAULT_BUILD_CACHE_RESERVED;
+  if (reserved === "0" || reserved.toLowerCase() === "off") {
+    log.debug("Build cache prune disabled (MERCURY_BUILD_CACHE_RESERVED=off)");
+    return;
+  }
+
+  const flags = ["--reserved-space", "--keep-storage"];
+  for (let i = 0; i < flags.length; i++) {
+    try {
+      run(["builder", "prune", "-f", `${flags[i]}=${reserved}`], 120_000);
+      log.info(`Pruned BuildKit build cache (${flags[i]}=${reserved})`);
+      return;
+    } catch (err) {
+      const message = errMsg(err);
+      // Docker/cobra emits "unknown flag: --x" / "unknown shorthand flag" when
+      // a flag isn't recognised. Match only those — a genuine value/daemon
+      // error ("invalid argument …", "failed to prune …") must NOT trigger the
+      // legacy retry, so it surfaces as a real warning instead of being masked.
+      const unknownFlag = /unknown (flag|shorthand)/i.test(message);
+      // Only fall through to the legacy flag when the modern one is
+      // unrecognised; any other failure is real and shouldn't be masked.
+      if (unknownFlag && i < flags.length - 1) continue;
+      log.warn(`Could not prune build cache: ${message}`);
+      return;
+    }
   }
 }
 
@@ -596,7 +702,16 @@ export async function ensureDerivedImage(
     const durationMs = Date.now() - startTime;
 
     log.info(`Built derived agent image ${derivedTag}`, { durationMs });
-    pruneStaleExtImages(hash, repo, log);
+    // Post-build disk hygiene is strictly best-effort: the build already
+    // succeeded, so a prune failure must never turn this into the base-image
+    // fallback path. Both helpers are internally guarded; this outer catch is
+    // belt-and-suspenders so a future edit inside them can't break the success.
+    try {
+      pruneStaleExtImages(hash, repo, log);
+      pruneBuildCache(log);
+    } catch (pruneErr) {
+      log.warn(`Post-build prune failed (non-fatal): ${String(pruneErr)}`);
+    }
     return derivedTag;
   } catch (err: unknown) {
     const stderr =
