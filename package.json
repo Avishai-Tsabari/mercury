@@ -86,7 +86,7 @@
     "@chat-adapter/telegram": "^4.26.0",
     "@earendil-works/pi-agent-core": "~0.79.6",
     "@earendil-works/pi-ai": "~0.79.10",
-    "@earendil-works/pi-coding-agent": "~0.79.6",
+    "@earendil-works/pi-coding-agent": "~0.81.1",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "axios": "^1.15.1",
     "chat": "^4.14.0",
