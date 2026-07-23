@@ -60,7 +60,7 @@ Env: `MERCURY_CONTAINER_ENV_PASSTHROUGH`.
 `claimed` is opt-in because it breaks setups that rely on blind passthrough for anything other than provider keys — API keys consumed by skills (search, TTS, scrapers) and any credential you added by hand. To migrate, declare those in an extension (see [extensions.md](extensions.md)) before switching. At startup with `all`, Mercury logs the vars it is passing that are neither declared nor provider credentials — names only, so a genuine outlier stands out:
 
 ```
-Container env passthrough: all — these vars reach every space's container and are scoped to nothing. […] vars=MERCURY_BRAVE_API_KEY, MERCURY_CLALIT_PASSWORD
+Container env passthrough: all — these vars reach every space's container and are scoped to nothing. […] vars=MERCURY_BRAVE_API_KEY, MERCURY_BILLING_API_KEY
 ```
 
 For secrets that only host-side hooks and jobs need, prefer `mercury.env({ from: "…", hostOnly: true })`, which keeps them out of containers in either mode. For credentials the agent should never hold at all, use a host-side capability handler (`mercury.capability()`), which runs the privileged call on the host and returns only the result.

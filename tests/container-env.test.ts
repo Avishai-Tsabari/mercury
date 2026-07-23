@@ -11,7 +11,7 @@ import {
 
 const env = {
   MERCURY_GEMINI_API_KEY: "gem",
-  MERCURY_CLALIT_PASSWORD: "pw",
+  MERCURY_BILLING_API_KEY: "pw",
   MERCURY_GH_TOKEN: "gh",
   MERCURY_API_SECRET: "secret",
   MERCURY_TELEGRAM_BOT_TOKEN: "tg",
@@ -24,7 +24,7 @@ const claimed = new Set(["MERCURY_GH_TOKEN"]);
 describe("listUnclaimedPassthroughVars", () => {
   test("lists MERCURY_* vars that are neither blocked nor claimed", () => {
     expect(listUnclaimedPassthroughVars(env, claimed)).toEqual([
-      "MERCURY_CLALIT_PASSWORD",
+      "MERCURY_BILLING_API_KEY",
       "MERCURY_GEMINI_API_KEY",
     ]);
   });
@@ -53,7 +53,7 @@ describe("listUnclaimedPassthroughVars", () => {
 describe("selectPassthroughEnv", () => {
   test("mode 'all' strips the MERCURY_ prefix", () => {
     expect(selectPassthroughEnv(env, claimed, "all")).toEqual([
-      { key: "CLALIT_PASSWORD", value: "pw" },
+      { key: "BILLING_API_KEY", value: "pw" },
       { key: "GEMINI_API_KEY", value: "gem" },
     ]);
   });
@@ -69,7 +69,7 @@ describe("selectPassthroughEnv", () => {
     const keys = selectPassthroughEnv(env, claimed, "claimed").map(
       (p) => p.key,
     );
-    expect(keys).not.toContain("CLALIT_PASSWORD");
+    expect(keys).not.toContain("BILLING_API_KEY");
   });
 
   test("mode 'claimed' still passes model-provider credentials", () => {
@@ -102,7 +102,7 @@ describe("selectPassthroughEnv", () => {
 describe("listUnexpectedPassthroughVars", () => {
   test("omits model-provider keys so a real outlier stands out", () => {
     expect(listUnexpectedPassthroughVars(env, claimed)).toEqual([
-      "MERCURY_CLALIT_PASSWORD",
+      "MERCURY_BILLING_API_KEY",
     ]);
   });
 
