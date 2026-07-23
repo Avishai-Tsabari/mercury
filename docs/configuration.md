@@ -41,6 +41,28 @@ Per-space overrides via `mrctl config set context.<key> <value>` always win over
 
 You may also set a top-level **`model_chain`** array as an alias for `model.chain`.
 
+## Container env passthrough (`agent.env_passthrough`)
+
+Controls which host `MERCURY_*` variables reach agent containers:
+
+```yaml
+agent:
+  env_passthrough: all       # all (default) | claimed
+```
+
+- **`all`** — every `MERCURY_*` var except a fixed blocklist is passed into the container with the prefix stripped (`MERCURY_BRAVE_API_KEY` → `BRAVE_API_KEY`). Convenient, but blunt: a secret added to `.env` for one purpose reaches **every space's container**, regardless of who triggered the turn or whether that space has anything to do with it.
+- **`claimed`** — only variables an extension declared via `mercury.env()` are passed, and only when the triggering caller holds that extension's permission. Undeclared variables stay on the host.
+
+Env: `MERCURY_CONTAINER_ENV_PASSTHROUGH`.
+
+`claimed` is opt-in because it breaks setups that rely on blind passthrough. To migrate, declare the vars you actually need in an extension (see [extensions.md](extensions.md)) before switching. At startup with `all`, Mercury logs the undeclared vars it is passing — names only — so you can see what is currently exposed:
+
+```
+Container env passthrough: all — these undeclared vars reach every space's container. […] vars=MERCURY_BRAVE_API_KEY, MERCURY_GEMINI_API_KEY
+```
+
+For secrets that only host-side hooks and jobs need, prefer `mercury.env({ from: "…", hostOnly: true })`, which keeps them out of containers in either mode. For credentials the agent should never hold at all, use a host-side capability handler (`mercury.capability()`), which runs the privileged call on the host and returns only the result.
+
 ## Extension config defaults (`extensions:`)
 
 Deployment-wide defaults for extension config keys, applied to **every space** (including auto-created DM spaces) at read time:

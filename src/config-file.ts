@@ -127,6 +127,7 @@ const mercuryFileSchema = z
           .optional(),
         container_bwrap_docker_compat: z.boolean().optional(),
         override_pi_system_prompt: z.boolean().optional(),
+        env_passthrough: z.enum(["all", "claimed"]).optional(),
       })
       .strip()
       .optional(),
@@ -247,6 +248,7 @@ const KNOWN_SECTION_KEYS: Record<string, Set<string>> = {
     "container_timeout_ms",
     "container_bwrap_docker_compat",
     "override_pi_system_prompt",
+    "env_passthrough",
   ]),
   discord: new Set(["gateway_duration_ms"]),
   telegram: new Set(["format_enabled"]),
@@ -388,6 +390,9 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
   if (f.agent?.override_pi_system_prompt != null) {
     o.overridePiSystemPrompt = f.agent.override_pi_system_prompt;
   }
+  if (f.agent?.env_passthrough != null) {
+    o.containerEnvPassthrough = f.agent.env_passthrough;
+  }
 
   if (f.discord?.gateway_duration_ms != null) {
     o.discordGatewayDurationMs = f.discord.gateway_duration_ms;
@@ -461,6 +466,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   containerNetwork: "MERCURY_CONTAINER_NETWORK",
   containerApiHost: "MERCURY_CONTAINER_API_HOST",
   containerBwrapDockerCompat: "MERCURY_CONTAINER_BWRAP_DOCKER_COMPAT",
+  containerEnvPassthrough: "MERCURY_CONTAINER_ENV_PASSTHROUGH",
   overridePiSystemPrompt: "MERCURY_OVERRIDE_PI_SYSTEM_PROMPT",
   maxConcurrency: "MERCURY_MAX_CONCURRENCY",
   rateLimitPerUser: "MERCURY_RATE_LIMIT_PER_USER",

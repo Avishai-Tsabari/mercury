@@ -134,6 +134,19 @@ const schema = z.object({
    */
   containerRuntime: z.enum(["runc", "runsc"]).default("runc"),
   /**
+   * Which MERCURY_* env vars reach agent containers.
+   * - "all" (default): every MERCURY_* var except the blocklist is passed with
+   *   the prefix stripped. Convenient, but a secret added to .env is exposed to
+   *   every space's container regardless of who triggered the turn.
+   * - "claimed": only vars an extension declared via `mercury.env()` are passed,
+   *   and only when the caller holds that extension's permission. Undeclared
+   *   vars stay on the host.
+   *
+   * "claimed" is opt-in because it breaks setups that rely on blind passthrough;
+   * declare the vars you need in an extension before switching.
+   */
+  containerEnvPassthrough: z.enum(["all", "claimed"]).default("all"),
+  /**
    * @deprecated Use MERCURY_CONTAINER_RUNTIME=runsc instead.
    * When true, `docker run` uses looser outer sandbox so bubblewrap can nest (e.g. Docker Desktop).
    * Ignored when containerRuntime is "runsc". See docs/container-lifecycle.md.

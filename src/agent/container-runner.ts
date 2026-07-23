@@ -20,6 +20,7 @@ import {
   INNER_RUN_DIR,
   innerApiSocketPath,
 } from "./api-socket.js";
+import { selectPassthroughEnv } from "./container-env.js";
 import { ContainerError } from "./container-error.js";
 
 /**
@@ -677,48 +678,15 @@ export class AgentContainerRunner {
       );
     }
 
-    // Env vars that should never be passed to containers
-    const BLOCKED_ENV_VARS = new Set([
-      "MERCURY_API_SECRET",
-      // Host-only: signs per-turn caller tokens. Injecting it would let the
-      // agent forge a token for any caller, defeating the whole mechanism.
-      "MERCURY_CALLER_TOKEN_KEY",
-      // Host-only: the inner→outer API socket path is set by code per spawn;
-      // never let an agent override which socket mrctl targets.
-      "MERCURY_API_SOCKET",
-      "MERCURY_CHAT_API_KEY",
-      "MERCURY_ADMINS",
-      // Host-only: affects `docker run` flags, not the agent process inside the container
-      "MERCURY_CONTAINER_BWRAP_DOCKER_COMPAT",
-      // Host-only: selects the OCI runtime for `docker run --runtime`; not meaningful inside the container
-      "MERCURY_CONTAINER_RUNTIME",
-      // Host-only: resolved volume mountpoint on the host; inner containers don't need it
-      "MERCURY_HOST_DATA_DIR",
-      "MERCURY_SLACK_BOT_TOKEN",
-      "MERCURY_SLACK_SIGNING_SECRET",
-      "MERCURY_DISCORD_BOT_TOKEN",
-      "MERCURY_DISCORD_GATEWAY_SECRET",
-      "MERCURY_TELEGRAM_BOT_TOKEN",
-      "MERCURY_TELEGRAM_WEBHOOK_SECRET_TOKEN",
-      "MERCURY_TEAMS_APP_ID",
-      "MERCURY_TEAMS_APP_PASSWORD",
-      "MERCURY_WHATSAPP_AUTH_DIR",
-    ]);
-
-    // Pass MERCURY_* vars to container with prefix stripped, excluding blocked vars
-    const claimed = input.claimedEnvSources;
-    const passthroughEnvPairs = Object.entries(process.env)
-      .filter(
-        (entry): entry is [string, string] =>
-          entry[0].startsWith("MERCURY_") &&
-          entry[1] !== undefined &&
-          !BLOCKED_ENV_VARS.has(entry[0]) &&
-          !claimed?.has(entry[0]),
-      )
-      .map(([key, value]) => ({
-        key: key.replace("MERCURY_", ""),
-        value: value,
-      }));
+    // Pass MERCURY_* vars to container with prefix stripped, excluding blocked
+    // and extension-claimed vars. In "claimed" mode this yields nothing and
+    // extension-declared vars (injected in runtime.ts behind the permission
+    // check) are the only way a secret reaches a container.
+    const passthroughEnvPairs = selectPassthroughEnv(
+      process.env,
+      input.claimedEnvSources,
+      this.config.containerEnvPassthrough,
+    );
 
     // Legacy path: older console versions stored the OAuth credential blob in
     // MERCURY_ANTHROPIC_API_KEY instead of MERCURY_ANTHROPIC_OAUTH_TOKEN.

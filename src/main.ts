@@ -22,6 +22,7 @@ import {
   apiSocketPath,
   sweepOrphanApiSockets,
 } from "./agent/api-socket.js";
+import { listUnclaimedPassthroughVars } from "./agent/container-env.js";
 import {
   logExtensionCapabilityMismatches,
   logUnknownModelCapabilityWarnings,
@@ -616,6 +617,27 @@ async function main() {
   }
   if (adapters.telegram) {
     logger.info("Telegram enabled (webhook or polling)");
+  }
+
+  // Inventory of what the blind passthrough carries. Names only — the values
+  // are the secrets. Logged once per start, not per container: the point is
+  // that an unnoticed entry here (a password added to .env for one space) is
+  // reaching every space's container, whoever triggered the turn.
+  if (config.containerEnvPassthrough === "claimed") {
+    logger.info(
+      "Container env passthrough: claimed — only extension-declared vars reach containers",
+    );
+  } else {
+    const unclaimed = listUnclaimedPassthroughVars(
+      process.env,
+      registry.getClaimedEnvSources(),
+    );
+    if (unclaimed.length > 0) {
+      logger.info(
+        "Container env passthrough: all — these undeclared vars reach every space's container. Declare them in an extension, or set agent.env_passthrough=claimed.",
+        { vars: unclaimed.join(", ") },
+      );
+    }
   }
 }
 

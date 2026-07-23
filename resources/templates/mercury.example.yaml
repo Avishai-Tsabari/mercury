@@ -62,6 +62,10 @@
 #   image: ghcr.io/avishai-tsabari/mercury-agent:latest
 #   container_timeout_ms: 300000
 #   container_bwrap_docker_compat: false
+#   # Which MERCURY_* vars reach containers. "all" (default) passes every
+#   # non-blocked var into every space's container; "claimed" passes only
+#   # extension-declared vars, gated by the caller's permission.
+#   env_passthrough: all
 
 # discord:
 #   gateway_duration_ms: 600000
