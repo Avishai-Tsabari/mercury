@@ -39,6 +39,40 @@ export const BLOCKED_ENV_VARS = new Set([
   "MERCURY_WHATSAPP_AUTH_DIR",
 ]);
 
+/**
+ * Model-provider credentials. pi reads these inside the container, so they are
+ * runtime plumbing rather than user secrets — and no extension declares them,
+ * which means "claimed" mode would otherwise leave the agent with no way to
+ * reach a model at all. Exempt from the claimed filter for that reason; still
+ * subject to BLOCKED_ENV_VARS.
+ *
+ * Mirrors the provider list in core/routes/dashboard.ts (drift is covered by a
+ * test), plus MERCURY_ANTHROPIC_OAUTH_TOKEN, which console provisioning sets
+ * instead of an API key.
+ */
+export const MODEL_PROVIDER_ENV_VARS = new Set([
+  "MERCURY_AI_GATEWAY_API_KEY",
+  "MERCURY_ANTHROPIC_API_KEY",
+  "MERCURY_ANTHROPIC_OAUTH_TOKEN",
+  "MERCURY_AWS_BEARER_TOKEN_BEDROCK",
+  "MERCURY_AZURE_OPENAI_API_KEY",
+  "MERCURY_CEREBRAS_API_KEY",
+  "MERCURY_DEEPSEEK_API_KEY",
+  "MERCURY_GEMINI_API_KEY",
+  "MERCURY_GITHUB_COPILOT_OAUTH_TOKEN",
+  "MERCURY_GOOGLE_CLOUD_API_KEY",
+  "MERCURY_GROQ_API_KEY",
+  "MERCURY_HF_TOKEN",
+  "MERCURY_KIMI_API_KEY",
+  "MERCURY_MINIMAX_API_KEY",
+  "MERCURY_MINIMAX_CN_API_KEY",
+  "MERCURY_MISTRAL_API_KEY",
+  "MERCURY_OPENAI_API_KEY",
+  "MERCURY_OPENROUTER_API_KEY",
+  "MERCURY_XAI_API_KEY",
+  "MERCURY_ZAI_API_KEY",
+]);
+
 export type EnvPassthroughMode = "all" | "claimed";
 
 /**
@@ -63,20 +97,39 @@ export function listUnclaimedPassthroughVars(
 }
 
 /**
+ * Undeclared vars that are not model-provider plumbing — the ones worth
+ * surfacing at startup. Provider keys are expected to be here and would only
+ * add noise; a var in this list is one nobody scoped to anything.
+ */
+export function listUnexpectedPassthroughVars(
+  env: NodeJS.ProcessEnv,
+  claimed: Set<string> | undefined,
+): string[] {
+  return listUnclaimedPassthroughVars(env, claimed).filter(
+    (key) => !MODEL_PROVIDER_ENV_VARS.has(key),
+  );
+}
+
+/**
  * The blind-passthrough pairs for a container spawn, with `MERCURY_` stripped.
  *
  * Extension-declared vars are excluded here on purpose — runtime.ts injects
- * those separately, behind the permission check. In "claimed" mode this
- * returns nothing at all.
+ * those separately, behind the permission check. In "claimed" mode only
+ * model-provider credentials pass, so the agent can still reach a model.
  */
 export function selectPassthroughEnv(
   env: NodeJS.ProcessEnv,
   claimed: Set<string> | undefined,
   mode: EnvPassthroughMode,
 ): Array<{ key: string; value: string }> {
-  if (mode === "claimed") return [];
+  const names =
+    mode === "claimed"
+      ? listUnclaimedPassthroughVars(env, claimed).filter((key) =>
+          MODEL_PROVIDER_ENV_VARS.has(key),
+        )
+      : listUnclaimedPassthroughVars(env, claimed);
 
-  return listUnclaimedPassthroughVars(env, claimed).map((key) => ({
+  return names.map((key) => ({
     key: key.replace("MERCURY_", ""),
     // listUnclaimedPassthroughVars already filtered out undefined values.
     value: env[key] as string,

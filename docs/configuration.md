@@ -53,12 +53,14 @@ agent:
 - **`all`** — every `MERCURY_*` var except a fixed blocklist is passed into the container with the prefix stripped (`MERCURY_BRAVE_API_KEY` → `BRAVE_API_KEY`). Convenient, but blunt: a secret added to `.env` for one purpose reaches **every space's container**, regardless of who triggered the turn or whether that space has anything to do with it.
 - **`claimed`** — only variables an extension declared via `mercury.env()` are passed, and only when the triggering caller holds that extension's permission. Undeclared variables stay on the host.
 
+**Model-provider credentials are exempt** and pass in both modes (`MERCURY_ANTHROPIC_API_KEY`, `MERCURY_ANTHROPIC_OAUTH_TOKEN`, `MERCURY_GEMINI_API_KEY`, `MERCURY_GROQ_API_KEY`, and the rest of the provider list). pi reads them inside the container, and no extension declares them — without the exemption, `claimed` would leave the agent unable to reach any model. They remain subject to the blocklist.
+
 Env: `MERCURY_CONTAINER_ENV_PASSTHROUGH`.
 
-`claimed` is opt-in because it breaks setups that rely on blind passthrough. To migrate, declare the vars you actually need in an extension (see [extensions.md](extensions.md)) before switching. At startup with `all`, Mercury logs the undeclared vars it is passing — names only — so you can see what is currently exposed:
+`claimed` is opt-in because it breaks setups that rely on blind passthrough for anything other than provider keys — API keys consumed by skills (search, TTS, scrapers) and any credential you added by hand. To migrate, declare those in an extension (see [extensions.md](extensions.md)) before switching. At startup with `all`, Mercury logs the vars it is passing that are neither declared nor provider credentials — names only, so a genuine outlier stands out:
 
 ```
-Container env passthrough: all — these undeclared vars reach every space's container. […] vars=MERCURY_BRAVE_API_KEY, MERCURY_GEMINI_API_KEY
+Container env passthrough: all — these vars reach every space's container and are scoped to nothing. […] vars=MERCURY_BRAVE_API_KEY, MERCURY_CLALIT_PASSWORD
 ```
 
 For secrets that only host-side hooks and jobs need, prefer `mercury.env({ from: "…", hostOnly: true })`, which keeps them out of containers in either mode. For credentials the agent should never hold at all, use a host-side capability handler (`mercury.capability()`), which runs the privileged call on the host and returns only the result.
