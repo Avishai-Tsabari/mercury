@@ -198,6 +198,46 @@ describe("getPiAuthCredential — concurrent refresh coalescing", () => {
     expect(b).toEqual({ status: "ok", apiKey: "sk-fresh" });
   });
 
+  test("a persist failure returns ok with the fresh key rather than refresh-failed", async () => {
+    // The chain-breaking case: the refresh succeeded, so the old refresh token
+    // is already consumed server-side. Failing the call here would throw away
+    // the only usable key we hold; it must be returned, not reclassified as a
+    // refresh failure.
+    mock.module("@earendil-works/pi-ai/oauth", () => ({
+      getOAuthApiKey: async () => ({
+        apiKey: "sk-fresh",
+        newCredentials: { access: "a2", refresh: "r2", expires: 999 },
+      }),
+    }));
+    const { getPiAuthCredential: freshGet } = await import(
+      "../src/storage/pi-auth.js"
+    );
+
+    // auth.json is readable, but the directory is made read-only so the atomic
+    // temp-write + rename cannot complete.
+    const realWrite = fs.writeFileSync;
+    let writeAttempted = false;
+    (fs as { writeFileSync: typeof fs.writeFileSync }).writeFileSync = ((
+      target: fs.PathOrFileDescriptor,
+      ...rest: unknown[]
+    ) => {
+      if (typeof target === "string" && target.includes(".tmp")) {
+        writeAttempted = true;
+        throw new Error("EACCES: simulated write failure");
+      }
+      return (realWrite as (...a: unknown[]) => void)(target, ...rest);
+    }) as typeof fs.writeFileSync;
+
+    try {
+      const result = await freshGet({ provider: "anthropic", authPath });
+      expect(writeAttempted).toBe(true);
+      expect(result).toEqual({ status: "ok", apiKey: "sk-fresh" });
+    } finally {
+      (fs as { writeFileSync: typeof fs.writeFileSync }).writeFileSync =
+        realWrite;
+    }
+  });
+
   test("a call after the window resolves refreshes again", async () => {
     let calls = 0;
     mock.module("@earendil-works/pi-ai/oauth", () => ({
