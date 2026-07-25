@@ -135,11 +135,21 @@ export async function getPiAuthCredential(options: {
 
   // Coalesce concurrent refreshes for the same auth file so only one
   // token-endpoint call is made; the rest share its result.
-  const key = options.authPath;
+  //
+  // The key must be canonical, not the caller's spelling: callers reach this
+  // function with the same file written different ways (a relative
+  // `.mercury/global/auth.json` from an extension, an absolute path from the
+  // container runner). Relative paths already resolve against `process.cwd()`
+  // inside `fs`, so `path.resolve` names the exact same file the raw spelling
+  // would have opened — it only removes the caller's freedom to defeat the
+  // dedupe by spelling. The resolved path is also what gets read, written and
+  // logged, so one file never appears under two names in the logs. (The map is
+  // process-local; coalescing across processes would need a lock file.)
+  const key = path.resolve(options.authPath);
   const existing = inflightRefresh.get(key);
   if (existing) return existing;
 
-  const promise = doGetPiAuthCredential(options);
+  const promise = doGetPiAuthCredential({ ...options, authPath: key });
   inflightRefresh.set(key, promise);
   try {
     return await promise;

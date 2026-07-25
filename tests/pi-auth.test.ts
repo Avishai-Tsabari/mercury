@@ -147,7 +147,12 @@ describe("getPiAuthCredential — concurrent refresh coalescing", () => {
   const savedOauth = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-auth-coalesce-"));
+    // realpath: on macOS os.tmpdir() is /var/... while process.cwd() after a
+    // chdir reports /private/var/..., which would make the relative-vs-absolute
+    // coalescing test compare two genuinely different strings.
+    dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "pi-auth-coalesce-")),
+    );
     authPath = path.join(dir, "auth.json");
     delete process.env.MERCURY_ANTHROPIC_API_KEY;
     delete process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
@@ -236,6 +241,46 @@ describe("getPiAuthCredential — concurrent refresh coalescing", () => {
       (fs as { writeFileSync: typeof fs.writeFileSync }).writeFileSync =
         realWrite;
     }
+  });
+
+  test("relative and absolute spellings of one file coalesce", async () => {
+    // The real-world shape: an extension passes an unresolved
+    // `<globalDir>/auth.json` while the container runner passes the resolved
+    // absolute path. Same file, two spellings — they must share one refresh.
+    let calls = 0;
+    mock.module("@earendil-works/pi-ai/oauth", () => ({
+      getOAuthApiKey: async () => {
+        calls++;
+        await new Promise((r) => setTimeout(r, 20));
+        return {
+          apiKey: "sk-fresh",
+          newCredentials: { access: "a2", refresh: "r2", expires: 999 },
+        };
+      },
+    }));
+    const { getPiAuthCredential: freshGet } = await import(
+      "../src/storage/pi-auth.js"
+    );
+
+    const savedCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const [a, b] = await Promise.all([
+        freshGet({ provider: "anthropic", authPath: "auth.json" }),
+        freshGet({ provider: "anthropic", authPath }),
+      ]);
+
+      expect(calls).toBe(1);
+      expect(a).toEqual({ status: "ok", apiKey: "sk-fresh" });
+      expect(b).toEqual({ status: "ok", apiKey: "sk-fresh" });
+    } finally {
+      process.chdir(savedCwd);
+    }
+
+    // Resolution must not have redirected the write: the rotated credential
+    // still lands in the same file the relative spelling named.
+    const persisted = JSON.parse(fs.readFileSync(authPath, "utf8"));
+    expect(persisted.anthropic.refresh).toBe("r2");
   });
 
   test("a call after the window resolves refreshes again", async () => {

@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import {
   getPiAuthCredential,
   parseOAuthTokenEnv,
@@ -451,7 +451,13 @@ export default function (mercury: {
     }
 
     // 2. Fall back to Mercury's auth.json (OAuth token refresh)
-    const authPath = config.authPath ?? join(config.globalDir, "auth.json");
+    // Resolved, not raw: extensions receive `ctx.config` with `globalDir` still
+    // relative, while the container runner resolves it. Both spellings name the
+    // same file, and naming it the same way keeps the error strings below (and
+    // the refresh dedupe in getPiAuthCredential) consistent between the two.
+    const authPath = resolve(
+      config.authPath ?? join(config.globalDir, "auth.json"),
+    );
     const cred = await getPiAuthCredential({
       provider: config.modelProvider,
       authPath,
