@@ -723,6 +723,18 @@ function buildPrompt(payload: Payload): string {
   return parts.join("\n");
 }
 
+/** Read-only bwrap binds for each resource entry the host mounted into pi's agent dir. */
+function piAgentRoBindArgs(): string[] {
+  const agentDir = "/home/mercury/.pi/agent";
+  if (!existsSync(agentDir)) return [];
+  const args: string[] = [];
+  for (const entry of readdirSync(agentDir)) {
+    const p = `${agentDir}/${entry}`;
+    args.push("--ro-bind", p, p);
+  }
+  return args;
+}
+
 /**
  * Build bwrap args for sandboxing the agent process.
  * Uses bubblewrap for defense-in-depth: Docker isolates from host, bwrap restricts within container.
@@ -762,9 +774,11 @@ function buildBwrapArgs(
     "--bind",
     "/home/mercury",
     "/home/mercury",
-    "--ro-bind",
-    "/home/mercury/.pi/agent",
-    "/home/mercury/.pi/agent",
+    // The host mounts the global resource dir entry by entry (auth.json stays
+    // on the host), so `.pi/agent` is a plain dir holding N read-only submounts
+    // rather than a single one. Re-bind each entry explicitly instead of relying
+    // on a recursive bind of the parent to carry the read-only flag down.
+    ...piAgentRoBindArgs(),
     "--proc",
     "/proc",
     "--dev",
@@ -836,11 +850,14 @@ function invokePiOnce(
       "--mode",
       "json",
       // Skip pi's project-trust store entirely. The store lives in
-      // /home/mercury/.pi/agent (mounted :ro) and even a read locks it via
-      // proper-lockfile (mkdir trust.json.lock → EROFS). Workspaces with
-      // trust-requiring resources already resolved to "untrusted" in
-      // non-interactive mode, and without such resources nothing trust-gated
-      // loads — so --no-approve preserves behavior either way.
+      // /home/mercury/.pi/agent, whose resource entries are read-only bind
+      // mounts, and even a read locks it via proper-lockfile (mkdir
+      // trust.json.lock). Workspaces with trust-requiring resources already
+      // resolved to "untrusted" in non-interactive mode, and without such
+      // resources nothing trust-gated loads — so --no-approve preserves
+      // behavior either way (the agent dir itself is now a Docker-created
+      // mount parent owned by root, so writing the trust file there would fail
+      // with EACCES rather than EROFS — still a failure, still skipped).
       "--no-approve",
       ...sessionArgs,
       "--provider",

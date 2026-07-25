@@ -8,6 +8,7 @@ import { mintCallerToken } from "../core/caller-token.js";
 import { scanOutbox } from "../core/outbox.js";
 import type { ExtImageBuildState } from "../extensions/image-builder.js";
 import { type Logger, logger } from "../logger.js";
+import { ensurePiResourceDir } from "../storage/memory.js";
 import { getPiAuthCredential } from "../storage/pi-auth.js";
 import type {
   ContainerResult,
@@ -33,6 +34,60 @@ import { ContainerError } from "./container-error.js";
  * attach connection, so an attached run hangs to its idleTimeout.
  */
 const INNER_IO_DIR = "/run/mercury-io";
+
+/** Where pi looks for global agent resources inside the inner container (PI_CODING_AGENT_DIR). */
+const INNER_PI_AGENT_DIR = "/home/mercury/.pi/agent";
+
+/**
+ * Entries of the host global dir that are mounted into `INNER_PI_AGENT_DIR`.
+ * Everything pi loads as a resource — and nothing else. `auth.json` (and the
+ * `.tmp` siblings an interrupted rotation can leave next to it) is deliberately
+ * absent: it carries the OAuth refresh token, and the container only ever needs
+ * the short-lived access token handed to it via ANTHROPIC_OAUTH_TOKEN.
+ *
+ * A superset of what Mercury itself writes (`.pi/`, `AGENTS.md`, `skills/`) —
+ * the remaining entries are pi resource kinds a user may drop in by hand, none
+ * of which can hold a credential.
+ */
+const PI_AGENT_RESOURCE_ENTRIES = [
+  ".pi",
+  "AGENTS.md",
+  "skills",
+  "agents",
+  "commands",
+  "prompts",
+  "extensions",
+] as const;
+
+/**
+ * Docker `-v` args exposing the global dir's resource entries at
+ * `INNER_PI_AGENT_DIR`, one mount per entry rather than one mount of the
+ * directory itself. Binding the directory would carry `auth.json` — and the
+ * `auth.json.<pid>.tmp` siblings an interrupted rotation can leave next to it
+ * (see `writeAuthFile` in storage/pi-auth.ts) — into the least-trusted part of
+ * the system, handing it the long-lived refresh token when all it needs is the
+ * access token injected as ANTHROPIC_OAUTH_TOKEN. The allowlist fails closed:
+ * anything new that lands in the global dir must be opted in here.
+ *
+ * `hostGlobalDir` is the path this process can stat; `innerGlobalDir` is the
+ * path the Docker daemon resolves the bind source against (they differ under
+ * MERCURY_HOST_DATA_DIR). Absent entries are skipped — Docker would otherwise
+ * create the missing source as a directory, turning `AGENTS.md` into a folder.
+ */
+export function buildPiAgentMountArgs(
+  hostGlobalDir: string,
+  innerGlobalDir: string,
+): string[] {
+  const args: string[] = [];
+  for (const entry of PI_AGENT_RESOURCE_ENTRIES) {
+    if (!fs.existsSync(path.join(hostGlobalDir, entry))) continue;
+    args.push(
+      "-v",
+      `${path.join(innerGlobalDir, entry)}:${INNER_PI_AGENT_DIR}/${entry}:ro`,
+    );
+  }
+  return args;
+}
 
 /** Poll interval (ms) while waiting for the inner container's result file. */
 const RESULT_POLL_MS = 150;
@@ -664,7 +719,11 @@ export class AgentContainerRunner {
     const globalDir = path.resolve(this.config.globalDir);
     const spacesRoot = path.resolve(this.config.spacesDir);
 
-    fs.mkdirSync(globalDir, { recursive: true });
+    // Resource structure, not a bare mkdir: the global dir is mounted entry by
+    // entry (see PI_AGENT_RESOURCE_ENTRIES), so an empty dir would leave the
+    // container without PI_CODING_AGENT_DIR at all. Idempotent — the same helper
+    // runtime.ts calls at startup.
+    ensurePiResourceDir(globalDir);
     fs.mkdirSync(spacesRoot, { recursive: true });
     try {
       execFileSync("chown", ["-R", "1000:1000", globalDir], { stdio: "pipe" });
@@ -807,7 +866,7 @@ export class AgentContainerRunner {
         value:
           "/home/mercury/.local/bin:/home/mercury/.bun/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin",
       },
-      { key: "PI_CODING_AGENT_DIR", value: "/home/mercury/.pi/agent" },
+      { key: "PI_CODING_AGENT_DIR", value: INNER_PI_AGENT_DIR },
       { key: "CALLER_ID", value: input.callerId },
       { key: "SPACE_ID", value: input.spaceId },
       {
@@ -957,8 +1016,6 @@ export class AgentContainerRunner {
       "-v",
       `${innerSpaceDir}:/spaces/${input.spaceId}`,
       "-v",
-      `${innerGlobalDir}:/home/mercury/.pi/agent:ro`,
-      "-v",
       `${readmePath}:/docs/mercury/README.md:ro`,
       "-v",
       `${docsDir}:/docs/mercury/docs:ro`,
@@ -967,6 +1024,8 @@ export class AgentContainerRunner {
       "-e",
       `IO_DIR=${INNER_IO_DIR}`,
     );
+
+    args.push(...buildPiAgentMountArgs(globalDir, innerGlobalDir));
 
     if (this.config.containerRuntime === "runsc") {
       // Mount the per-agent run dir so the inner container can reach the outer's
