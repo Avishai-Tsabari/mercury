@@ -9,7 +9,11 @@ import { scanOutbox } from "../core/outbox.js";
 import type { ExtImageBuildState } from "../extensions/image-builder.js";
 import { type Logger, logger } from "../logger.js";
 import { ensurePiResourceDir } from "../storage/memory.js";
-import { getPiAuthCredential } from "../storage/pi-auth.js";
+import {
+  getPiAuthCredential,
+  hasOAuthEntry,
+  providerCredentialEnvVar,
+} from "../storage/pi-auth.js";
 import type {
   ContainerResult,
   MessageAttachment,
@@ -702,6 +706,62 @@ export class AgentContainerRunner {
       : `mercury-${timestamp}-${id}`;
   }
 
+  /**
+   * Resolve each OAuth provider in the model chain from the host's auth.json
+   * and append its credential to `envPairs` as the env var pi reads it from.
+   *
+   * Only providers pi can be handed a token for are servable: `openai-codex`
+   * has no env var at all (see `providerCredentialEnvVar`), so a codex leg is
+   * dead on arrival and says so in the log rather than failing obscurely inside
+   * the container. Providers already carrying a credential through passthrough
+   * env are left alone — an explicit `MERCURY_*` value outranks the file.
+   *
+   * A leg that cannot be served is logged, not thrown: `MODEL_CHAIN` exists so
+   * a later leg can carry the turn when an earlier one fails, and refusing the
+   * whole spawn over one unusable leg would defeat that. The Anthropic
+   * fail-fast above is unaffected — it guards the primary provider.
+   */
+  private async injectChainOAuthCredentials(
+    envPairs: Array<{ key: string; value: string }>,
+    extraEnv: Record<string, string> | undefined,
+    authPath: string,
+    spaceId: string,
+    // Injected like `OAuthSpawnDeps` above, so a test can exercise the
+    // refresh-failure branch without a token endpoint.
+    resolveCredential: typeof getPiAuthCredential = getPiAuthCredential,
+  ): Promise<void> {
+    const providers = new Set(
+      (this.config.resolvedModelChain ?? []).map((leg) => leg.provider),
+    );
+    for (const provider of providers) {
+      const envVar = providerCredentialEnvVar(provider);
+      if (!envVar) {
+        if (hasOAuthEntry(authPath, provider)) {
+          logger.warn(
+            `Model chain leg "${provider}" has OAuth credentials in ${authPath}, but pi reads no env var for that provider — the credential cannot be passed to the container (auth.json stays on the host). This leg will fail; use a provider with an API key env var, or drop the leg.`,
+            { spaceId, provider },
+          );
+        }
+        continue;
+      }
+
+      const alreadySet =
+        envPairs.some((p) => p.key === envVar && p.value) ||
+        Boolean(extraEnv?.[envVar]);
+      if (alreadySet) continue;
+
+      const credential = await resolveCredential({ provider, authPath });
+      if (credential.status === "ok") {
+        envPairs.push({ key: envVar, value: credential.apiKey });
+      } else if (credential.status === "refresh-failed") {
+        logger.warn(
+          `OAuth refresh failed for model chain leg "${provider}" (${authPath}) — the container starts without that credential. Re-authenticate on the host with mercury auth login.`,
+          { spaceId, provider },
+        );
+      }
+    }
+  }
+
   async reply(input: {
     spaceId: string;
     spaceWorkspace: string;
@@ -857,6 +917,17 @@ export class AgentContainerRunner {
         throw ContainerError.noCredentials(input.spaceId, detail);
       }
     }
+
+    // Every other OAuth provider in the resolved chain. The container used to
+    // read auth.json itself (the global dir was mounted wholesale); that file
+    // now stays on the host because it carries refresh tokens, so each leg's
+    // credential must be resolved here and handed over as env instead.
+    await this.injectChainOAuthCredentials(
+      passthroughEnvPairs,
+      input.extraEnv,
+      this.config.authPath ?? path.join(globalDir, "auth.json"),
+      input.spaceId,
+    );
 
     const envPairs = [
       // Internal vars (set by code, not from env)

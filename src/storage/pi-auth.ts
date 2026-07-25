@@ -3,10 +3,45 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   getOAuthApiKey,
+  getOAuthProvider,
   type OAuthCredentials,
   type OAuthProviderId,
 } from "@earendil-works/pi-ai/oauth";
 import { logger } from "../logger.js";
+
+/**
+ * Env var pi reads a provider's credential from, for the OAuth providers
+ * `mercury auth login` can write to auth.json. Mirrors `getApiKeyEnvVars` in
+ * `@earendil-works/pi-ai/dist/env-api-keys.js` (see its `anthropic` and
+ * `github-copilot` cases) — that mapping is not exported, so it is restated
+ * here rather than reached into.
+ *
+ * `openai-codex` is deliberately absent: pi has no env var for it, so a codex
+ * credential can only travel in auth.json — which Mercury no longer mounts into
+ * the container (it carries the refresh token). A codex leg is unservable.
+ */
+const PROVIDER_CREDENTIAL_ENV_VAR: Record<string, string> = {
+  anthropic: "ANTHROPIC_OAUTH_TOKEN",
+  "github-copilot": "COPILOT_GITHUB_TOKEN",
+};
+
+/**
+ * The env var that carries this provider's credential into the agent container,
+ * or undefined when pi has no env var for it (the credential cannot be passed).
+ */
+export function providerCredentialEnvVar(provider: string): string | undefined {
+  return PROVIDER_CREDENTIAL_ENV_VAR[provider];
+}
+
+/**
+ * Whether auth.json holds an OAuth entry for this provider — asked before
+ * resolving one, so a credential that could never be passed on (no env var for
+ * it) is reported without spending a single-use refresh token to find out.
+ */
+export function hasOAuthEntry(authPath: string, provider: string): boolean {
+  const entry = readAuthFile(path.resolve(authPath))[provider];
+  return Boolean(entry && typeof entry === "object" && entry.type === "oauth");
+}
 
 type AuthEntry =
   | ({ type: "oauth" } & OAuthCredentials)
@@ -107,6 +142,15 @@ export function parseOAuthTokenEnv(raw: string): OAuthTokenEnvValue {
   return { status: "corrupt-blob" };
 }
 
+/** Whether the environment names an Anthropic credential that can actually be used. */
+function hasAnthropicEnvOverride(): boolean {
+  if (process.env.MERCURY_ANTHROPIC_API_KEY) return true;
+  const raw = process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN;
+  if (!raw) return false;
+  const parsed = parseOAuthTokenEnv(raw);
+  return parsed.status === "token" || parsed.status === "blob";
+}
+
 export type PiAuthCredential =
   | { status: "ok"; apiKey: string }
   /** No usable oauth entry (or an env override takes precedence). */
@@ -122,19 +166,29 @@ export async function getPiAuthCredential(options: {
   provider: string;
   authPath: string;
 }): Promise<PiAuthCredential> {
-  if (
-    process.env.MERCURY_ANTHROPIC_API_KEY ||
-    process.env.MERCURY_ANTHROPIC_OAUTH_TOKEN
-  ) {
+  // Anthropic-only override: a *usable* MERCURY_ANTHROPIC_* value is the
+  // operator naming the credential to use, so the file is not consulted. No
+  // other provider has such a variable — theirs arrive as ordinary passthrough
+  // env, which the caller checks before asking us.
+  //
+  // A corrupt blob is not an override: it names nothing, and treating its mere
+  // presence as one would suppress the file fallback that is the only remaining
+  // way to authenticate.
+  if (options.provider === "anthropic" && hasAnthropicEnvOverride()) {
     return { status: "none" };
   }
 
-  if (options.provider !== "anthropic") {
+  // Only providers pi can refresh an OAuth token for. Anything else in the file
+  // (a hand-written api_key entry, a provider from a newer pi) is not ours to
+  // interpret, and getOAuthApiKey would throw on an unknown id.
+  if (!getOAuthProvider(options.provider)) {
     return { status: "none" };
   }
 
   // Coalesce concurrent refreshes for the same auth file so only one
-  // token-endpoint call is made; the rest share its result.
+  // token-endpoint call is made; the rest share its result. Keyed per provider
+  // as well as per file: one auth.json holds an entry per provider, and a
+  // shared promise would hand a copilot caller the anthropic token.
   //
   // The key must be canonical, not the caller's spelling: callers reach this
   // function with the same file written different ways (a relative
@@ -145,11 +199,14 @@ export async function getPiAuthCredential(options: {
   // dedupe by spelling. The resolved path is also what gets read, written and
   // logged, so one file never appears under two names in the logs. (The map is
   // process-local; coalescing across processes would need a lock file.)
-  const key = path.resolve(options.authPath);
+  const authPath = path.resolve(options.authPath);
+  // "|" is not legal in a Windows path and never appears in a provider id,
+  // so the two halves can never run together into a colliding key.
+  const key = `${authPath}|${options.provider}`;
   const existing = inflightRefresh.get(key);
   if (existing) return existing;
 
-  const promise = doGetPiAuthCredential({ ...options, authPath: key });
+  const promise = doGetPiAuthCredential({ ...options, authPath });
   inflightRefresh.set(key, promise);
   try {
     return await promise;
@@ -163,9 +220,10 @@ async function doGetPiAuthCredential(options: {
   authPath: string;
 }): Promise<PiAuthCredential> {
   const authPath = options.authPath;
+  const provider = options.provider;
   const auth = readAuthFile(authPath);
 
-  const entry = auth.anthropic;
+  const entry = auth[provider];
   if (!entry || typeof entry !== "object" || entry.type !== "oauth") {
     return { status: "none" };
   }
@@ -183,8 +241,9 @@ async function doGetPiAuthCredential(options: {
   // rejected, which is a genuine credential failure.
   let result: Awaited<ReturnType<typeof getOAuthApiKey>>;
   try {
-    result = await getOAuthApiKey("anthropic" satisfies OAuthProviderId, {
-      anthropic: {
+    result = await getOAuthApiKey(provider as OAuthProviderId, {
+      [provider]: {
+        ...entry,
         access,
         refresh,
         expires,
@@ -192,7 +251,7 @@ async function doGetPiAuthCredential(options: {
     });
   } catch (error) {
     logger.warn(
-      `Failed to load anthropic oauth token from pi auth.json at ${authPath}`,
+      `Failed to load ${provider} oauth token from pi auth.json at ${authPath}`,
       error instanceof Error ? error : undefined,
     );
     return {
@@ -203,7 +262,7 @@ async function doGetPiAuthCredential(options: {
 
   if (!result) return { status: "refresh-failed" };
 
-  // Step 2 — persist, in its own scope. Anthropic rotates the refresh token on
+  // Step 2 — persist, in its own scope. Providers rotate the refresh token on
   // every refresh (the old one is consumed server-side), so when a rotation has
   // happened the value in memory is the ONLY copy of the current chain link.
   // A failure to save it is therefore unrecoverable — but it is emphatically not
@@ -216,9 +275,12 @@ async function doGetPiAuthCredential(options: {
     nextCredentials.refresh !== refresh;
 
   try {
+    // Re-read immediately before merging: another provider's refresh may have
+    // rewritten the file since this call read it, and a stale snapshot would
+    // drop that provider's rotation on the floor.
     writeAuthFile(authPath, {
-      ...auth,
-      anthropic: {
+      ...readAuthFile(authPath),
+      [provider]: {
         type: "oauth" as const,
         ...nextCredentials,
       },
@@ -226,7 +288,7 @@ async function doGetPiAuthCredential(options: {
     if (rotated) {
       // The single log line that makes a broken chain diagnosable after the
       // fact: which link was replaced by which, without recording either token.
-      logger.info("Rotated anthropic oauth refresh token", {
+      logger.info(`Rotated ${provider} oauth refresh token`, {
         authPath,
         previousRefresh: fingerprint(refresh),
         newRefresh: fingerprint(nextCredentials.refresh as string),
@@ -235,7 +297,7 @@ async function doGetPiAuthCredential(options: {
   } catch (error) {
     if (rotated) {
       logger.error(
-        `CRITICAL: anthropic OAuth credential was rotated but could NOT be saved to ${authPath} — the previous refresh token is already consumed server-side, so this space will fail to authenticate once the current access token expires. Re-run mercury auth login from the project directory that owns this file.`,
+        `CRITICAL: ${provider} OAuth credential was rotated but could NOT be saved to ${authPath} — the previous refresh token is already consumed server-side, so this space will fail to authenticate once the current access token expires. Re-run mercury auth login from the project directory that owns this file.`,
         {
           authPath,
           previousRefresh: fingerprint(refresh),
@@ -253,7 +315,7 @@ async function doGetPiAuthCredential(options: {
     }
   }
 
-  logger.debug("Loaded anthropic oauth token from pi auth.json", {
+  logger.debug(`Loaded ${provider} oauth token from pi auth.json`, {
     authPath,
   });
   return { status: "ok", apiKey: result.apiKey };
