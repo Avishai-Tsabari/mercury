@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { proto, WAMessage } from "@whiskeysockets/baileys";
+import {
+  normalizeMessageContent,
+  type proto,
+  type WAMessage,
+} from "@whiskeysockets/baileys";
 import type { Message } from "chat";
 import type { WhatsAppBaileysAdapter } from "../adapters/whatsapp.js";
 import {
@@ -79,13 +83,14 @@ export class WhatsAppBridge implements PlatformBridge {
       }
 
       if (attachments.length === 0) {
+        const content = normalizeMessageContent(rawMsg.message ?? undefined);
         const contextInfo =
-          rawMsg.message?.extendedTextMessage?.contextInfo ||
-          rawMsg.message?.audioMessage?.contextInfo ||
-          rawMsg.message?.imageMessage?.contextInfo ||
-          rawMsg.message?.videoMessage?.contextInfo ||
-          rawMsg.message?.documentMessage?.contextInfo ||
-          rawMsg.message?.stickerMessage?.contextInfo;
+          content?.extendedTextMessage?.contextInfo ||
+          content?.audioMessage?.contextInfo ||
+          content?.imageMessage?.contextInfo ||
+          content?.videoMessage?.contextInfo ||
+          content?.documentMessage?.contextInfo ||
+          content?.stickerMessage?.contextInfo;
         if (contextInfo?.quotedMessage) {
           if (await ctx.isOverQuota()) {
             logger.warn(

@@ -41,7 +41,7 @@ describe("quoted voice message detection", () => {
     expect(detectWhatsAppMedia(quotedMessage)).toBeNull();
   });
 
-  test("detects image in quotedMessage (non-audio — filtered by downloadQuotedMedia)", () => {
+  test("detects image in quotedMessage", () => {
     const quotedMessage: proto.IMessage = {
       imageMessage: {
         mimetype: "image/jpeg",
@@ -72,14 +72,45 @@ describe("quoted voice message detection", () => {
     expect(media?.type).toBe("voice");
   });
 
-  test("downloadQuotedMedia returns null for non-audio quoted media", async () => {
+  test("downloadQuotedMedia returns null for quoted video (not re-fetched)", async () => {
     const contextInfo: proto.IContextInfo = {
       stanzaId: "msg-456",
       participant: "972541234567@s.whatsapp.net",
       quotedMessage: {
-        imageMessage: {
-          mimetype: "image/jpeg",
+        videoMessage: {
+          mimetype: "video/mp4",
           fileLength: 50000 as unknown as Long,
+        },
+      },
+    };
+
+    // biome-ignore lint/suspicious/noExplicitAny: mock socket for test
+    const result = await downloadQuotedMedia(contextInfo, {} as any, {
+      maxSizeBytes: 10_000_000,
+      outputDir: "/tmp/test",
+    });
+    expect(result).toBeNull();
+  });
+
+  test("downloadQuotedMedia detects quoted captioned document (wrapped envelope)", async () => {
+    // A captioned document arrives wrapped in documentWithCaptionMessage even
+    // when quoted. Oversized file → size guard returns null BEFORE download,
+    // proving detection saw through the envelope (a detection miss would also
+    // return null, but only after skipping this guard entirely — covered by
+    // the detectWhatsAppMedia envelope tests in whatsapp-media.test.ts).
+    const contextInfo: proto.IContextInfo = {
+      stanzaId: "msg-999",
+      participant: "972541234567@s.whatsapp.net",
+      quotedMessage: {
+        documentWithCaptionMessage: {
+          message: {
+            documentMessage: {
+              mimetype: "application/pdf",
+              fileName: "report.pdf",
+              caption: "read this",
+              fileLength: 50_000_000 as unknown as Long,
+            },
+          },
         },
       },
     };

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   downloadMediaMessage,
+  normalizeMessageContent,
   type proto,
   type WAMessage,
   type WASocket,
@@ -64,8 +65,11 @@ export interface MediaDownloadOptions {
  * Returns null if the message has no media.
  */
 export function detectWhatsAppMedia(
-  message: proto.IMessage | null | undefined,
+  rawMessage: proto.IMessage | null | undefined,
 ): WhatsAppMediaInfo | null {
+  // Captioned documents (and ephemeral/view-once media) arrive wrapped in a
+  // FutureProofMessage envelope, e.g. documentWithCaptionMessage.message.
+  const message = normalizeMessageContent(rawMessage ?? undefined);
   if (!message) return null;
 
   // Voice note (push-to-talk)
@@ -238,9 +242,18 @@ export async function downloadWhatsAppMedia(
   }
 }
 
+/** Media types worth re-fetching when someone replies to the message. */
+const QUOTED_DOWNLOAD_TYPES: ReadonlySet<MediaType> = new Set([
+  "voice",
+  "audio",
+  "document",
+  "image",
+]);
+
 /**
- * Download audio from a quoted (replied-to) WhatsApp message.
- * Only downloads voice/audio types — other media types are skipped.
+ * Download media from a quoted (replied-to) WhatsApp message.
+ * Downloads voice/audio/document/image — video is skipped (too large to
+ * re-fetch speculatively on every reply).
  */
 export async function downloadQuotedMedia(
   contextInfo: proto.IContextInfo,
@@ -253,7 +266,7 @@ export async function downloadQuotedMedia(
   const mediaInfo = detectWhatsAppMedia(quotedMessage);
   if (!mediaInfo) return null;
 
-  if (mediaInfo.type !== "voice" && mediaInfo.type !== "audio") return null;
+  if (!QUOTED_DOWNLOAD_TYPES.has(mediaInfo.type)) return null;
 
   const syntheticMsg: WAMessage = {
     key: {
@@ -310,7 +323,12 @@ export async function downloadQuotedMedia(
     fs.mkdirSync(mediaDir, { recursive: true });
 
     const ext = mimeToExt(mediaInfo.mimeType);
-    const filename = `${Date.now()}-${mediaInfo.type}.${ext}`;
+    const safeName = mediaInfo.filename
+      ? path.basename(mediaInfo.filename).replace(/[^a-zA-Z0-9._-]/g, "_")
+      : undefined;
+    const filename = safeName
+      ? `${Date.now()}-${safeName}`
+      : `${Date.now()}-${mediaInfo.type}.${ext}`;
     const filePath = path.join(mediaDir, filename);
 
     fs.writeFileSync(filePath, buffer);
@@ -327,6 +345,7 @@ export async function downloadQuotedMedia(
       path: filePath,
       type: mediaInfo.type,
       mimeType: mediaInfo.mimeType,
+      filename: mediaInfo.filename,
       sizeBytes: buffer.length,
     };
   } catch (error) {
