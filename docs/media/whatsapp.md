@@ -47,7 +47,13 @@ Saved to: {workspace}/inbox/{timestamp}-{type}.{ext}
 function detectWhatsAppMedia(message: proto.IMessage): WhatsAppMediaInfo | null
 ```
 
-Checks message for media fields in order:
+The message is first unwrapped with Baileys' `normalizeMessageContent()` —
+WhatsApp wraps some payloads in FutureProofMessage envelopes
+(`documentWithCaptionMessage` for documents sent with a caption,
+`ephemeralMessage` in disappearing chats, `viewOnceMessage`/`viewOnceMessageV2`,
+`editedMessage`). Without unwrapping, a captioned PDF is invisible.
+
+Then checks the unwrapped content for media fields in order:
 1. `audioMessage?.ptt` → voice note
 2. `audioMessage` → audio
 3. `imageMessage` → image
@@ -157,7 +163,7 @@ Unknown MIME types default to `.bin`.
 
 2. **No built-in transcription** — Voice notes are saved as audio files; pi cannot play them. Install the **voice-transcribe** extension (local Whisper or cloud OpenAI/Groq/Gemini) to prepend a text transcript — see [overview.md](overview.md#voice-transcription).
 
-3. **Reply context doesn't include file** — When replying to a media message, we include metadata but not the actual file path. The original attachment would need to be looked up.
+3. **Quoted media re-download is partial** — Replying to a voice/audio/document/image message re-downloads the quoted file into the inbox (so "read this" replies work even if the original send was missed). Quoted videos are not re-fetched — too large to download speculatively on every reply.
 
 4. **Ephemeral media** — WhatsApp media URLs expire. Download must happen immediately when the message arrives.
 

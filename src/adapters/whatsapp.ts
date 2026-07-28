@@ -6,6 +6,7 @@ import makeWASocket, {
   fetchLatestWaWebVersion,
   jidDecode,
   makeCacheableSignalKeyStore,
+  normalizeMessageContent,
   type proto,
   useMultiFileAuthState,
   type WAMessage,
@@ -45,7 +46,11 @@ type WhatsAppThreadId = {
   threadJid: string;
 };
 
-function extractText(message?: proto.IMessage | null): string {
+function extractText(rawMessage?: proto.IMessage | null): string {
+  // Unwrap FutureProofMessage envelopes (documentWithCaptionMessage,
+  // ephemeralMessage, viewOnceMessage, …) — a document sent with a caption
+  // arrives as documentWithCaptionMessage.message.documentMessage.
+  const message = normalizeMessageContent(rawMessage ?? undefined);
   if (!message) return "";
   return (
     message.conversation ||
@@ -58,8 +63,9 @@ function extractText(message?: proto.IMessage | null): string {
 }
 
 function getContextInfo(
-  message?: proto.IMessage | null,
+  rawMessage?: proto.IMessage | null,
 ): proto.IContextInfo | undefined {
+  const message = normalizeMessageContent(rawMessage ?? undefined);
   if (!message) return undefined;
   const contextInfo =
     message.extendedTextMessage?.contextInfo ||
@@ -601,7 +607,16 @@ export class WhatsAppBaileysAdapter
     }
 
     const text = [baseText, replyContext].filter(Boolean).join("\n\n").trim();
-    if (!text && !hasMedia) return;
+    if (!text && !hasMedia) {
+      // Neither text nor media extracted — an unrecognized message shape would
+      // otherwise vanish silently (this is how captioned documents got lost
+      // before documentWithCaptionMessage unwrapping was added).
+      logger.debug("WhatsApp message dropped: no text or media extracted", {
+        remoteJid: chatJid,
+        messageKeys: Object.keys(msg.message ?? {}),
+      });
+      return;
+    }
 
     const threadId = this.encodeThreadId({
       chatJid,

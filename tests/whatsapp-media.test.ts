@@ -100,6 +100,50 @@ describe("detectWhatsAppMedia", () => {
     expect(result?.mimeType).toBe("image/webp");
   });
 
+  test("detects captioned document wrapped in documentWithCaptionMessage", () => {
+    const message: proto.IMessage = {
+      documentWithCaptionMessage: {
+        message: {
+          documentMessage: {
+            mimetype: "application/pdf",
+            fileName: "Sales-Nav AI.pdf",
+            caption: "does this answer the need?",
+            fileLength: 371000 as unknown as Long,
+          },
+        },
+      },
+    };
+    const result = detectWhatsAppMedia(message);
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("document");
+    expect(result?.mimeType).toBe("application/pdf");
+    expect(result?.filename).toBe("Sales-Nav AI.pdf");
+  });
+
+  test("detects media wrapped in ephemeralMessage (disappearing chats)", () => {
+    const message: proto.IMessage = {
+      ephemeralMessage: {
+        message: {
+          imageMessage: { mimetype: "image/jpeg" },
+        },
+      },
+    };
+    const result = detectWhatsAppMedia(message);
+    expect(result?.type).toBe("image");
+  });
+
+  test("detects media wrapped in viewOnceMessageV2", () => {
+    const message: proto.IMessage = {
+      viewOnceMessageV2: {
+        message: {
+          videoMessage: { mimetype: "video/mp4" },
+        },
+      },
+    };
+    const result = detectWhatsAppMedia(message);
+    expect(result?.type).toBe("video");
+  });
+
   test("uses default mimeType when not specified", () => {
     const imageMsg: proto.IMessage = { imageMessage: {} };
     expect(detectWhatsAppMedia(imageMsg)?.mimeType).toBe("image/jpeg");
