@@ -2,6 +2,10 @@
 
 Personal AI assistant for chat platforms. Runs agents in Docker containers using [pi](https://github.com/badlogic/pi) as the runtime.
 
+**Working language:** `en`
+
+> The language for prose written *for a human to read and act on* — chiefly the one-line manual checks collected in `docs/pending-verification.md`, which only work if they are understood at a glance. Set it to whatever you read fastest (`he`, `es`, …). Code, identifiers, commit messages, and these planning docs stay in English regardless.
+
 ## Commands
 
 ```bash
