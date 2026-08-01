@@ -138,6 +138,45 @@ describe("resolveModelChainCapabilities", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("marks unknown model ids as source=default so guesses stay labelled", () => {
+    const chain = [
+      { provider: "anthropic", model: "claude-does-not-exist-9" },
+      { provider: "anthropic", model: "claude-haiku-4-5" },
+    ];
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mercury-mc-src-"));
+    try {
+      const { chainCaps } = resolveModelChainCapabilities(chain, dir, null);
+      // Unknown id: capabilities are a guess, and must say so — the container
+      // suppresses "vision NOT available" claims when source is "default".
+      expect(chainCaps[0]?.source).toBe("default");
+      expect(chainCaps[0]?.vision).toBe(false);
+      // Known id: looked up, so the flags are assertable facts.
+      expect(chainCaps[1]?.source).toBe("builtin");
+      expect(chainCaps[1]?.vision).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("yaml override reports source=yaml", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mercury-mc-yml-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "model-capabilities.yaml"),
+        "models:\n  some-new-model:\n    vision: true\n",
+      );
+      const { chainCaps } = resolveModelChainCapabilities(
+        [{ provider: "anthropic", model: "some-new-model" }],
+        dir,
+        null,
+      );
+      expect(chainCaps[0]?.source).toBe("yaml");
+      expect(chainCaps[0]?.vision).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("chainSupportsRequirements", () => {
@@ -160,5 +199,38 @@ describe("chainSupportsRequirements", () => {
         [{ ...DEFAULT_CAPABILITIES, tools: true, vision: false }],
       ),
     ).toBe(false);
+  });
+
+  test("a resolved vision:false really does exclude", () => {
+    expect(
+      chainSupportsRequirements(
+        ["vision"],
+        [{ ...DEFAULT_CAPABILITIES, vision: false, source: "builtin" }],
+      ),
+    ).toBe(false);
+  });
+
+  test("an unresolved model id is permissive, not exclusionary", () => {
+    // Regression: a model absent from pi's registry resolves to
+    // vision:false/source:"default". Treating that guess as fact silently
+    // dropped capability-gated extensions and skills at startup.
+    expect(
+      chainSupportsRequirements(
+        ["vision"],
+        [{ ...DEFAULT_CAPABILITIES, vision: false, source: "default" }],
+      ),
+    ).toBe(true);
+  });
+
+  test("one unresolved leg is enough for the chain to qualify", () => {
+    expect(
+      chainSupportsRequirements(
+        ["vision", "audio_input"],
+        [
+          { ...DEFAULT_CAPABILITIES, vision: false, source: "builtin" },
+          { ...DEFAULT_CAPABILITIES, source: "default" },
+        ],
+      ),
+    ).toBe(true);
   });
 });

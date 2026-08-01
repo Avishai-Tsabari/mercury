@@ -9,18 +9,23 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { ModelLeg } from "../config.js";
 import {
+  type CapabilitySource,
   DEFAULT_CAPABILITIES,
   type ModelCapabilities,
   type ModelCapabilityKey,
+  type WireModelCapabilities,
 } from "./model-capabilities-core.js";
 
 export type {
+  CapabilitySource,
   ModelCapabilities,
   ModelCapabilityKey,
+  WireModelCapabilities,
 } from "./model-capabilities-core.js";
 export { DEFAULT_CAPABILITIES } from "./model-capabilities-core.js";
 
-export type CapabilityResolveSource = "env" | "yaml" | "builtin" | "default";
+/** @deprecated Use `CapabilitySource` from model-capabilities-core. */
+export type CapabilityResolveSource = CapabilitySource;
 
 export type ResolvedModelCapabilities = {
   capabilities: ModelCapabilities;
@@ -164,22 +169,40 @@ export function resolveModelChainCapabilities(
   dataDirAbsolute: string,
   envCaps: ModelCapabilities | null,
 ): {
-  chainCaps: ModelCapabilities[];
+  chainCaps: WireModelCapabilities[];
   userMap: UserModelCapabilitiesMap | null;
 } {
   const userMap = loadUserModelCapabilitiesMap(dataDirAbsolute);
-  const chainCaps = chain.map((leg) =>
-    resolveModelCapabilities(leg.model, leg.provider, userMap, envCaps),
-  );
+  const chainCaps = chain.map((leg) => {
+    const { capabilities, source } = resolveModelCapabilitiesWithSource(
+      leg.model,
+      leg.provider,
+      userMap,
+      envCaps,
+    );
+    return { ...capabilities, source };
+  });
   return { chainCaps, userMap };
 }
 
 export function chainSupportsRequirements(
   requires: ModelCapabilityKey[],
-  chainCaps: ModelCapabilities[],
+  chainCaps: WireModelCapabilities[],
 ): boolean {
   if (requires.length === 0) return true;
-  return chainCaps.some((caps) => requires.every((key) => caps[key] === true));
+  // A `false` from an unresolved model id (`source: "default"`) is a guess, not
+  // a fact — `DEFAULT_CAPABILITIES` assumes no vision, so every model newer
+  // than the pinned pi registry looks incapable here. Dropping a
+  // capability-gated extension or skill on that guess removes function from a
+  // model that may well support it, and does so invisibly at startup. Treat
+  // unknown as permissive: let the extension install and fail visibly at use
+  // time instead. This is the last consumer of `source` — the system prompt no
+  // longer narrates vision or audio at all (see `buildCapabilitySection`).
+  const satisfies = (caps: WireModelCapabilities, key: ModelCapabilityKey) =>
+    caps[key] === true || caps.source === "default";
+  return chainCaps.some((caps) =>
+    requires.every((key) => satisfies(caps, key)),
+  );
 }
 
 /** Log warnings for models that fell back to defaults (once per distinct model id). */

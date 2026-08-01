@@ -4,6 +4,7 @@ import {
   type ModelCapabilities,
   parseModelCapabilitiesEnv,
   resolveModelChainCapabilities,
+  type WireModelCapabilities,
 } from "./agent/model-capabilities.js";
 import { mergeRawMercuryConfig } from "./config-file.js";
 import { parseModelLegsArray } from "./config-model-chain.js";
@@ -305,7 +306,7 @@ export type AppConfig = z.infer<typeof schema> & {
   /** Parsed MERCURY_MODEL_CAPABILITIES override, if valid. */
   parsedModelCapabilitiesEnv: ModelCapabilities | null;
   /** Capabilities per chain leg (same order as resolvedModelChain). */
-  resolvedModelChainCapabilities: ModelCapabilities[];
+  resolvedModelChainCapabilities: WireModelCapabilities[];
   /** Effective budget after clamping to container timeout. */
   effectiveModelChainBudgetMs: number;
   /** Parsed `extensionDefaults` JSON: flat "ext.key" → value map. */

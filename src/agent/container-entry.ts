@@ -12,8 +12,10 @@ import {
 import path from "node:path";
 import type { MessageAttachment, StoredMessage } from "../types.js";
 import {
+  type CapabilitySource,
   DEFAULT_CAPABILITIES,
   type ModelCapabilities,
+  type WireModelCapabilities,
 } from "./model-capabilities-core.js";
 import { classifyPiFailure } from "./pi-failure-class.js";
 import {
@@ -59,48 +61,60 @@ function backoffMs(attemptIndex: number): number {
   return Math.min(cap, base + jitter);
 }
 
-function parsePartialCapabilities(obj: unknown): ModelCapabilities {
-  if (!obj || typeof obj !== "object") return { ...DEFAULT_CAPABILITIES };
+const CAPABILITY_SOURCES: readonly CapabilitySource[] = [
+  "env",
+  "yaml",
+  "builtin",
+  "default",
+];
+
+/** Guessed capabilities, explicitly marked as such. */
+function unverifiedCapabilities(): WireModelCapabilities {
+  return { ...DEFAULT_CAPABILITIES, source: "default" };
+}
+
+function parsePartialCapabilities(obj: unknown): WireModelCapabilities {
+  if (!obj || typeof obj !== "object") return unverifiedCapabilities();
   const o = obj as Record<string, unknown>;
-  const out = { ...DEFAULT_CAPABILITIES };
+  const out: WireModelCapabilities = unverifiedCapabilities();
   if (typeof o.tools === "boolean") out.tools = o.tools;
   if (typeof o.vision === "boolean") out.vision = o.vision;
   if (typeof o.audio_input === "boolean") out.audio_input = o.audio_input;
   if (typeof o.audio_output === "boolean") out.audio_output = o.audio_output;
   if (typeof o.extended_thinking === "boolean")
     out.extended_thinking = o.extended_thinking;
+  if (
+    typeof o.source === "string" &&
+    (CAPABILITY_SOURCES as readonly string[]).includes(o.source)
+  ) {
+    out.source = o.source as CapabilitySource;
+  }
   return out;
 }
 
 /**
  * Per-leg capabilities from host (MODEL_CHAIN_CAPABILITIES JSON array).
- * When missing or invalid, defaults to DEFAULT_CAPABILITIES for each leg.
+ * When missing or invalid, falls back to guessed capabilities marked
+ * `source: "default"` so no unverified limitation is asserted to the model.
  */
 function parseModelChainCapabilitiesFromEnv(
   legCount: number,
-): ModelCapabilities[] {
+): WireModelCapabilities[] {
+  const fallback = (): WireModelCapabilities[] =>
+    Array.from({ length: legCount }, unverifiedCapabilities);
+
   const raw = process.env.MODEL_CHAIN_CAPABILITIES?.trim();
-  if (!raw) {
-    return Array.from({ length: legCount }, () => ({
-      ...DEFAULT_CAPABILITIES,
-    }));
-  }
+  if (!raw) return fallback();
   try {
     const arr = JSON.parse(raw) as unknown;
-    if (!Array.isArray(arr)) {
-      return Array.from({ length: legCount }, () => ({
-        ...DEFAULT_CAPABILITIES,
-      }));
-    }
-    const out: ModelCapabilities[] = [];
+    if (!Array.isArray(arr)) return fallback();
+    const out: WireModelCapabilities[] = [];
     for (let i = 0; i < legCount; i++) {
       out.push(parsePartialCapabilities(arr[i]));
     }
     return out;
   } catch {
-    return Array.from({ length: legCount }, () => ({
-      ...DEFAULT_CAPABILITIES,
-    }));
+    return fallback();
   }
 }
 
@@ -191,33 +205,20 @@ function formatContextTimestamp(ms: number): string {
   });
 }
 
-function hasImageAttachments(
-  attachments: MessageAttachment[] | undefined,
-): boolean {
-  if (!attachments?.length) return false;
-  return attachments.some(
-    (a) =>
-      a.type === "image" ||
-      (a.mimeType?.toLowerCase().startsWith("image/") ?? false),
-  );
-}
-
-function hasAudioAttachments(
-  attachments: MessageAttachment[] | undefined,
-): boolean {
-  if (!attachments?.length) return false;
-  return attachments.some(
-    (a) =>
-      a.type === "audio" ||
-      a.type === "voice" ||
-      (a.mimeType?.toLowerCase().startsWith("audio/") ?? false),
-  );
-}
-
-function buildCapabilitySection(
-  caps: ModelCapabilities,
-  payload: Payload,
-): string {
+/**
+ * Narrates only `tools` — the one capability pi does not track and Mercury can
+ * state as fact, since a `false` can only come from operator config.
+ *
+ * Vision and audio are deliberately absent. pi's `read` tool already emits
+ * "[Current model does not support images...]" at the moment an image is read,
+ * keyed to the model it is actually calling, and stays silent for model ids it
+ * does not recognise. Mercury's up-front version had to guess for unknown ids,
+ * and `DEFAULT_CAPABILITIES` guesses `vision: false` — which told every model
+ * newer than the pinned pi registry that it was blind. The audio flags could
+ * never be anything but `false` from a lookup (pi has no audio models, and
+ * voice notes are transcribed host-side), so they only ever added noise.
+ */
+export function buildCapabilitySection(caps: WireModelCapabilities): string {
   const parts: string[] = ["## Current model capabilities"];
   parts.push(
     `This turn uses a model with the following constraints (do not assume you can exceed them):`,
@@ -225,34 +226,11 @@ function buildCapabilitySection(
   parts.push(
     `- **tools (bash / read / write / edit):** ${caps.tools ? "available" : "NOT available — you cannot run shell commands, read/write workspace files via tools, or use mrctl"}`,
   );
-  parts.push(
-    `- **vision (images):** ${caps.vision ? "available" : "NOT available"}`,
-  );
-  parts.push(
-    `- **audio input:** ${caps.audio_input ? "available" : "NOT available"}`,
-  );
-  parts.push(
-    `- **audio output:** ${caps.audio_output ? "available" : "NOT available"}`,
-  );
 
   if (!caps.tools) {
     parts.push("");
     parts.push(
       `**Toolless mode:** You must answer from general knowledge and the text of the user message only. For tasks that require generating files (PDFs, scripts, merges), running commands, or using \`mrctl\`, explain what the user would need to do manually or suggest switching to a model that supports tools (see Mercury docs / \`.mercury/model-capabilities.yaml\`).`,
-    );
-  }
-
-  if (!caps.vision && hasImageAttachments(payload.attachments)) {
-    parts.push("");
-    parts.push(
-      `**Note:** This model cannot process image pixels. Image files are still listed in <attachments /> with paths — you may reference paths and filenames but cannot interpret visual content.`,
-    );
-  }
-
-  if (!caps.audio_input && hasAudioAttachments(payload.attachments)) {
-    parts.push("");
-    parts.push(
-      `**Note:** This model cannot process audio. Voice attachments are listed with paths only.`,
     );
   }
 
@@ -356,7 +334,7 @@ Your prompt may include \`<active_episodes>\` XML with time-bounded topics relev
     parts.push(claudeCodePreamble);
   }
   parts.push(mercuryPlatform);
-  parts.push(buildCapabilitySection(caps, payload));
+  parts.push(buildCapabilitySection(caps));
   parts.push(memory);
   parts.push(destructiveOps);
   parts.push(toolResultPresentation);

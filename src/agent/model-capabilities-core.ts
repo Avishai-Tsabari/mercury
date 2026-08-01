@@ -13,6 +13,22 @@ export type ModelCapabilities = {
 
 export type ModelCapabilityKey = keyof ModelCapabilities;
 
+/**
+ * Where a capability set came from. `"default"` means the model id matched
+ * nothing — the flags below are guesses, not facts, and callers must not
+ * present them to the model as constraints. See `buildCapabilitySection`.
+ */
+export type CapabilitySource = "env" | "yaml" | "builtin" | "default";
+
+/**
+ * Capabilities as serialized to the container over `MODEL_CHAIN_CAPABILITIES`.
+ * `source` rides along so the container can tell a looked-up `false` from an
+ * assumed one.
+ */
+export type WireModelCapabilities = ModelCapabilities & {
+  source?: CapabilitySource;
+};
+
 /** Fallback when no builtin / YAML / env match. */
 export const DEFAULT_CAPABILITIES: ModelCapabilities = {
   tools: true,
