@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { Db } from "../src/storage/db.js";
+import {
+  Db,
+  SQLITE_QUERY_CACHE_SIZE,
+  SQLITE_QUERY_CACHE_STATIC_EXISTS,
+} from "../src/storage/db.js";
 
 let tmpDir: string;
 let db: Db;
@@ -14,11 +18,46 @@ beforeEach(() => {
 
 afterEach(() => {
   db.close();
-  try {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  } catch {
-    // Windows: SQLite WAL handle may not be released yet
-  }
+  // Deliberately NOT wrapped in try/catch. This used to swallow an EBUSY on
+  // Windows caused by bun:sqlite leaving db file handles open — see the cache
+  // note in src/storage/db.ts. With that fixed, the bare call is what makes a
+  // regression visible instead of silent.
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe("sqlite statement cache", () => {
+  // Guards the fix in src/storage/db.ts: bun:sqlite does not finalize the
+  // statements it evicts from its prepared-statement cache, so the db file
+  // handles stay open. Raising the cap above the number of statements this file
+  // issues means nothing is ever evicted.
+  //
+  // The EBUSY symptom is Windows-only, so these two assert the cause rather than
+  // the symptom — otherwise a regression would be invisible on Linux CI.
+
+  test("bun still has the cache knob db.ts writes to", () => {
+    // Fails if a future Bun renames or removes MAX_QUERY_CACHE_SIZE. Cannot be
+    // checked by reading the value back — db.ts writes through a cast, which
+    // would create the property and read back green while the leak returned.
+    expect(SQLITE_QUERY_CACHE_STATIC_EXISTS).toBe(true);
+  });
+
+  test("db.ts issues fewer statements than the cache can hold", () => {
+    // The real invariant. If db.ts grows past the cap, eviction resumes and the
+    // handle leak comes back silently.
+    //
+    // Counting call sites approximates the distinct-SQL count. It is not exact
+    // in either direction — repeated identical SQL inflates it, and the one
+    // dynamically built statement (listConversations' filter combinations)
+    // yields several strings from a single site — so the cap keeps a wide
+    // margin rather than tracking this number closely.
+    const source = fs.readFileSync(
+      path.join(import.meta.dir, "../src/storage/db.ts"),
+      "utf8",
+    );
+    const callSites = (source.match(/\.(query|prepare)\(/g) ?? []).length;
+    expect(callSites).toBeGreaterThan(0); // guard against the regex silently matching nothing
+    expect(callSites).toBeLessThan(SQLITE_QUERY_CACHE_SIZE);
+  });
 });
 
 describe("spaces", () => {

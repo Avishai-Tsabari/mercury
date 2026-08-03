@@ -14,6 +14,43 @@ import type {
   TokenUsage,
 } from "../types.js";
 
+// `bun:sqlite` caches prepared statements per Database, capped at
+// Database.MAX_QUERY_CACHE_SIZE (default 20). When a 21st distinct statement is
+// prepared the least-recently-used one is evicted WITHOUT being finalized, so
+// sqlite3_close() returns SQLITE_BUSY. Bun's close() swallows that, leaving the
+// OS handles for state.db / -wal / -shm open. On Windows the next rmdir fails
+// with EBUSY; on POSIX the unlink succeeds anyway, which is why this is
+// invisible on Linux CI.
+//
+// This file issues ~114 distinct statements, so eviction is constant. Raising
+// the cap above that count means nothing is ever evicted and every statement is
+// finalized by close(). The set is bounded — statements are static SQL except
+// listConversations' filter combinations, which are themselves bounded — so
+// this does not grow without limit. Roughly a few KB per statement.
+//
+// Bun reads the cap on each cache insert rather than snapshotting it when a
+// Database is constructed (verified), so import order does not matter. It is
+// nonetheless a process-global: this changes the cap for every bun:sqlite
+// consumer in the process, not just Db. Today db.ts is the only importer.
+//
+// If db.ts ever grows past this many distinct statements the failure returns
+// silently, so keep generous headroom — tests/db.test.ts gates that.
+// Found because deleteSpace's ~12 statements in one call pushed a fresh
+// per-test Db past the cap, and the temp dir then refused to delete.
+//
+// The cast is required because the static exists at runtime but is missing from
+// bun-types. Read the property BEFORE assigning: writing through the cast would
+// happily create the property on an object that never had it, so a post-hoc
+// read cannot distinguish "Bun has this knob and we set it" from "Bun dropped
+// the knob and we invented a dead property." Only this pre-read can, and a test
+// asserts it — otherwise a future Bun rename silently restores the leak, and
+// the EBUSY symptom is Windows-only so Linux CI would stay green.
+const sqliteStatic = Database as unknown as { MAX_QUERY_CACHE_SIZE: number };
+export const SQLITE_QUERY_CACHE_STATIC_EXISTS =
+  typeof sqliteStatic.MAX_QUERY_CACHE_SIZE === "number";
+export const SQLITE_QUERY_CACHE_SIZE = 500;
+sqliteStatic.MAX_QUERY_CACHE_SIZE = SQLITE_QUERY_CACHE_SIZE;
+
 type SpaceRow = {
   id: string;
   name: string;

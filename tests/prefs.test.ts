@@ -24,11 +24,8 @@ describe("space_preferences (Db)", () => {
 
   afterEach(() => {
     db.close();
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // Windows: SQLite WAL handle may not be released yet
-    }
+    // Deliberately NOT wrapped in try/catch — see the note in tests/db.test.ts.
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("set, get, list, delete", () => {
@@ -134,11 +131,8 @@ describe("/api/prefs", () => {
 
   afterEach(() => {
     db.close();
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // Windows: SQLite WAL handle may not be released yet
-    }
+    // Deliberately NOT wrapped in try/catch — see the note in tests/db.test.ts.
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   async function api(
