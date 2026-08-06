@@ -107,6 +107,75 @@ describe("Runtime rate limiting", () => {
     expect(r4.reason).toBe("Rate limit exceeded. Try again shortly.");
   });
 
+  test("space with messages.locale=he gets the Hebrew burst denial", async () => {
+    const message = {
+      platform: "test",
+      spaceId: "test-group",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    runtime.db.ensureSpace("test-group");
+    runtime.db.setSpaceConfig("test-group", "messages.locale", "he", "test");
+
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+
+    const r4 = await runtime.handleRawInput(message, "chat-sdk");
+    expect(r4.type).toBe("denied");
+    expect(r4.reason).toBe("חריגה ממגבלת הקצב. נסו שוב בעוד רגע.");
+  });
+
+  test("@global messages.locale applies when per-space unset", async () => {
+    const message = {
+      platform: "test",
+      spaceId: "test-group",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    runtime.db.setSpaceConfig("@global", "messages.locale", "he", "test");
+
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+
+    const r4 = await runtime.handleRawInput(message, "chat-sdk");
+    expect(r4.type).toBe("denied");
+    expect(r4.reason).toBe("חריגה ממגבלת הקצב. נסו שוב בעוד רגע.");
+  });
+
+  test("per-space en beats @global he", async () => {
+    const message = {
+      platform: "test",
+      spaceId: "test-group",
+      text: "@Pi hello",
+      callerId: "user1",
+      isDM: false,
+      isReplyToBot: false,
+      attachments: [],
+    };
+
+    runtime.db.setSpaceConfig("@global", "messages.locale", "he", "test");
+    runtime.db.ensureSpace("test-group");
+    runtime.db.setSpaceConfig("test-group", "messages.locale", "en", "test");
+
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+    await runtime.handleRawInput(message, "chat-sdk");
+
+    const r4 = await runtime.handleRawInput(message, "chat-sdk");
+    expect(r4.type).toBe("denied");
+    expect(r4.reason).toBe("Rate limit exceeded. Try again shortly.");
+  });
+
   test("different users have separate rate limits", async () => {
     const user1Message = {
       platform: "test",

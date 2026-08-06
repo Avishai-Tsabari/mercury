@@ -100,6 +100,23 @@ describe("Global daily rate limit fallback", () => {
     expect(r3.type).toBe("denied");
   });
 
+  test("he space gets the Hebrew daily denial", async () => {
+    runtime = createRuntime(tempDir, { rateLimitDailyMember: 1 });
+    runtime.containerRunner.reply = mock(async () => ({
+      reply: "ok",
+      files: [],
+    }));
+    runtime.db.ensureSpace("main");
+    runtime.db.setSpaceConfig("main", "messages.locale", "he", "test");
+
+    const r1 = await runtime.handleRawInput(makeMsg(), "chat-sdk");
+    expect(r1.type).toBe("assistant");
+
+    const r2 = await runtime.handleRawInput(makeMsg(), "chat-sdk");
+    expect(r2.type).toBe("denied");
+    expect(r2.reason).toContain("נוצלו 1/1 הודעות היום");
+  });
+
   test("per-space override takes precedence over global", async () => {
     runtime = createRuntime(tempDir, { rateLimitDailyMember: 1 });
     runtime.containerRunner.reply = mock(async () => ({

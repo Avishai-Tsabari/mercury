@@ -1,3 +1,8 @@
+import {
+  formatSystemMessage,
+  type MessageLocale,
+} from "../core/system-messages.js";
+
 export type UserErrorCategory =
   | "auth"
   | "key-limit"
@@ -28,50 +33,19 @@ export function classifyUserError(errorText: string): UserErrorCategory {
   return "generic";
 }
 
-const MESSAGES: Record<UserErrorCategory, { platform: string; byok: string }> =
-  {
-    "key-limit": {
-      platform: "I've reached my usage limit for now. Please try again later.",
-      byok: "Your API key has hit its spending limit. Check your provider's key settings to increase it.",
-    },
-    "rate-limit": {
-      platform:
-        "I'm handling too many requests right now — please try again in a moment.",
-      byok: "Your API key is being rate-limited. Try again in a moment.",
-    },
-    auth: {
-      platform:
-        "Something went wrong on my end. This has been logged and the admin will be notified.",
-      byok: "Your API key appears to be invalid or expired. Please update it.",
-    },
-    credits: {
-      platform: "I've reached my usage limit for now. Please try again later.",
-      byok: "Your API provider account has insufficient credits. Add credits to continue.",
-    },
-    "server-error": {
-      platform:
-        "The AI service is temporarily unavailable. Please try again in a few minutes.",
-      byok: "The AI service is temporarily unavailable. Please try again in a few minutes.",
-    },
-    generic: {
-      platform:
-        "Something went wrong processing your request. Please try again.",
-      byok: "Something went wrong processing your request. Please try again, or check your API key and provider status.",
-    },
-  };
-
 export function friendlyErrorMessage(
   category: UserErrorCategory,
   mode: "platform" | "byok",
   consoleUrl?: string,
+  locale: MessageLocale = "en",
 ): string {
-  let message = MESSAGES[category][mode];
+  let message = formatSystemMessage(locale, `err_${category}_${mode}`);
   const base = consoleUrl?.replace(/\/+$/, "");
   if (base && mode === "platform") {
     if (category === "key-limit" || category === "credits") {
-      message += `\n\nUpgrade your plan: ${base}/dashboard/billing`;
+      message += `\n\n${formatSystemMessage(locale, "err_upgrade_suffix", { url: base })}`;
     } else if (category === "auth") {
-      return `Your Anthropic session has expired. Please reconnect: ${base}/dashboard/model`;
+      return formatSystemMessage(locale, "err_session_expired", { url: base });
     }
   }
   return message;

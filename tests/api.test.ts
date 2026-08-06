@@ -610,6 +610,23 @@ describe("PUT /api/config", () => {
     expect(data.error).toContain("true, false");
   });
 
+  test("sets messages.locale", async () => {
+    const { status, data } = await api("PUT", "/api/config", {
+      body: { key: "messages.locale", value: "he" },
+    });
+    expect(status).toBe(200);
+    expect(data.key).toBe("messages.locale");
+    expect(data.value).toBe("he");
+  });
+
+  test("rejects invalid messages.locale value", async () => {
+    const { status, data } = await api("PUT", "/api/config", {
+      body: { key: "messages.locale", value: "fr" },
+    });
+    expect(status).toBe(400);
+    expect(data.error).toContain("en, he");
+  });
+
   test("rejects missing key", async () => {
     const { status } = await api("PUT", "/api/config", {
       body: { value: "foo" },

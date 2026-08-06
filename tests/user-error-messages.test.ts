@@ -140,6 +140,38 @@ describe("friendlyErrorMessage", () => {
     expect(msg).not.toContain("/dashboard/billing");
   });
 
+  test("he locale returns Hebrew messages", () => {
+    expect(friendlyErrorMessage("generic", "platform", undefined, "he")).toBe(
+      "משהו השתבש בעיבוד הבקשה. נסו שוב.",
+    );
+    expect(friendlyErrorMessage("auth", "byok", undefined, "he")).toContain(
+      "API",
+    );
+  });
+
+  test("he locale keeps the consoleUrl links", () => {
+    const upgrade = friendlyErrorMessage(
+      "key-limit",
+      "platform",
+      "https://console.example.com",
+      "he",
+    );
+    expect(upgrade).toContain("https://console.example.com/dashboard/billing");
+    const reconnect = friendlyErrorMessage(
+      "auth",
+      "platform",
+      "https://console.example.com",
+      "he",
+    );
+    expect(reconnect).toContain("https://console.example.com/dashboard/model");
+  });
+
+  test("default locale is en (unchanged behavior)", () => {
+    expect(friendlyErrorMessage("generic", "platform")).toBe(
+      "Something went wrong processing your request. Please try again.",
+    );
+  });
+
   test("consoleUrl trailing slash is stripped to avoid double slash", () => {
     const msg = friendlyErrorMessage(
       "key-limit",

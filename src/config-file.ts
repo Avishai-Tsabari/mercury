@@ -166,6 +166,13 @@ const mercuryFileSchema = z
       .strip()
       .optional(),
 
+    messages: z
+      .object({
+        locale: z.enum(["en", "he"]).optional(),
+      })
+      .strip()
+      .optional(),
+
     dm_auto_space: z
       .object({
         enabled: z.boolean().optional(),
@@ -211,6 +218,7 @@ const KNOWN_TOP_KEYS = new Set([
   "telegram",
   "media",
   "permissions",
+  "messages",
   "dm_auto_space",
   "extensions",
 ]);
@@ -254,6 +262,7 @@ const KNOWN_SECTION_KEYS: Record<string, Set<string>> = {
   telegram: new Set(["format_enabled"]),
   media: new Set(["enabled", "max_size_mb"]),
   permissions: new Set(["admins"]),
+  messages: new Set(["locale"]),
   dm_auto_space: new Set([
     "enabled",
     "admin_ids",
@@ -407,6 +416,8 @@ function flattenMercuryFile(f: MercuryFile): RawMercuryConfigInput {
 
   if (f.permissions?.admins != null) o.admins = f.permissions.admins;
 
+  if (f.messages?.locale != null) o.messagesLocale = f.messages.locale;
+
   if (f.dm_auto_space?.enabled != null) {
     o.dmAutoSpaceEnabled = f.dm_auto_space.enabled;
   }
@@ -484,6 +495,7 @@ const CAMEL_TO_ENV: Record<string, string> = {
   mediaEnabled: "MERCURY_MEDIA_ENABLED",
   mediaMaxSizeMb: "MERCURY_MEDIA_MAX_SIZE_MB",
   admins: "MERCURY_ADMINS",
+  messagesLocale: "MERCURY_MESSAGES_LOCALE",
   profile: "MERCURY_PROFILE",
   apiSecret: "MERCURY_API_SECRET",
   callerTokenKey: "MERCURY_CALLER_TOKEN_KEY",

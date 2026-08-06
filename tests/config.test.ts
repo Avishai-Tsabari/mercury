@@ -207,6 +207,50 @@ model:
     }
   });
 
+  test("mercury.yaml messages.locale maps to messagesLocale", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `messages:
+  locale: he
+`,
+        "utf-8",
+      );
+      process.env.MERCURY_CONFIG_FILE = yamlPath;
+      const config = loadConfig();
+      expect(config.messagesLocale).toBe("he");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("MERCURY_MESSAGES_LOCALE env overrides yaml", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
+    try {
+      const yamlPath = path.join(dir, "mercury.yaml");
+      writeFileSync(
+        yamlPath,
+        `messages:
+  locale: he
+`,
+        "utf-8",
+      );
+      process.env.MERCURY_CONFIG_FILE = yamlPath;
+      process.env.MERCURY_MESSAGES_LOCALE = "en";
+      const config = loadConfig();
+      expect(config.messagesLocale).toBe("en");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("messagesLocale defaults to en", () => {
+    const config = loadConfig();
+    expect(config.messagesLocale).toBe("en");
+  });
+
   test("invalid mercury.yaml throws with path in message", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "mercury-cfg-"));
     try {

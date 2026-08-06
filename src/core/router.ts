@@ -3,6 +3,11 @@ import type { Db } from "../storage/db.js";
 import type { MessageAttachment } from "../types.js";
 import { SLASH_COMMANDS } from "./commands.js";
 import { hasPermission, resolveRole } from "./permissions.js";
+import {
+  formatSystemMessage,
+  type MessageLocale,
+  resolveLocale,
+} from "./system-messages.js";
 import { loadTriggerConfig, matchTrigger } from "./trigger.js";
 
 export type RouteResult =
@@ -125,6 +130,7 @@ export function routeInput(input: {
         input.callerId,
         input.isDM,
         seededAdmins,
+        resolveLocale(input.db, input.config, input.spaceId),
         verb,
         arg,
       );
@@ -134,14 +140,24 @@ export function routeInput(input: {
   // Check for commands after trigger (e.g. "@Pi stop", "Pi compact")
   const cmdWord = prompt.toLowerCase().trim();
   if (cmdWord in CHAT_COMMANDS) {
-    return gateCommand(input.db, input.spaceId, cmdWord, role, input.callerId);
+    return gateCommand(
+      input.db,
+      input.spaceId,
+      cmdWord,
+      role,
+      input.callerId,
+      resolveLocale(input.db, input.config, input.spaceId),
+    );
   }
 
   // Check prompt permission
   if (!hasPermission(input.db, input.spaceId, role, "prompt")) {
     return {
       type: "denied",
-      reason: "You don't have permission to use the agent in this group.",
+      reason: formatSystemMessage(
+        resolveLocale(input.db, input.config, input.spaceId),
+        "no_permission_prompt",
+      ),
     };
   }
 
@@ -163,6 +179,7 @@ function gateSlashCommand(
   callerId: string,
   isDM: boolean,
   seededAdmins: string[],
+  locale: MessageLocale,
   verb?: string,
   arg?: string,
 ): RouteResult {
@@ -170,7 +187,7 @@ function gateSlashCommand(
     if (!seededAdmins.includes(callerId)) {
       return {
         type: "denied",
-        reason: `You don't have permission to use '/${command}'.`,
+        reason: formatSystemMessage(locale, "no_permission_slash", { command }),
       };
     }
     return { type: "command", command, verb, arg, callerId, role };
@@ -178,13 +195,13 @@ function gateSlashCommand(
   if (!isDM && role !== "admin" && role !== "system") {
     return {
       type: "denied",
-      reason: "Slash commands are only available to admins in groups.",
+      reason: formatSystemMessage(locale, "slash_admin_only"),
     };
   }
   if (!hasPermission(db, spaceId, role, "prompt")) {
     return {
       type: "denied",
-      reason: `You don't have permission to use '/${command}'.`,
+      reason: formatSystemMessage(locale, "no_permission_slash", { command }),
     };
   }
   return { type: "command", command, verb, arg, callerId, role };
@@ -196,6 +213,7 @@ function gateCommand(
   command: string,
   role: string,
   callerId: string,
+  locale: MessageLocale,
 ): RouteResult {
   const permission = CHAT_COMMANDS[command];
   if (!permission) return { type: "ignore" };
@@ -203,7 +221,7 @@ function gateCommand(
   if (!hasPermission(db, spaceId, role, permission)) {
     return {
       type: "denied",
-      reason: `You don't have permission to use '${command}'.`,
+      reason: formatSystemMessage(locale, "no_permission_command", { command }),
     };
   }
 

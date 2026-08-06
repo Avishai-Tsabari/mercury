@@ -221,6 +221,14 @@ const schema = z.object({
   // ─── Permissions ────────────────────────────────────────────────────
   admins: z.string().default(""),
 
+  // ─── System Messages ────────────────────────────────────────────────
+  /**
+   * Deployment-wide default locale for host-generated system messages
+   * (rate-limit denials, error messages, permission denials). Overridable
+   * per-space via the `messages.locale` space config key. Env: MERCURY_MESSAGES_LOCALE.
+   */
+  messagesLocale: z.enum(["en", "he"]).default("en"),
+
   // ─── Applicative Profile ────────────────────────────────────────────
   /**
    * Name of the active applicative profile (informational at runtime; the

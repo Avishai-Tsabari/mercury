@@ -36,6 +36,11 @@ import { getActiveProfilePrompt } from "./profiles.js";
 import { RateLimiter } from "./rate-limiter.js";
 import { type RouteResult, routeInput } from "./router.js";
 import { SpaceQueue } from "./space-queue.js";
+import {
+  confirmWords,
+  formatSystemMessage,
+  resolveLocale,
+} from "./system-messages.js";
 import { TaskScheduler } from "./task-scheduler.js";
 
 export type InputSource = "cli" | "scheduler" | "chat-sdk";
@@ -205,6 +210,8 @@ export class MercuryCoreRuntime {
     const sensitiveName = this.getActiveSensitiveConnectionName();
     if (!sensitiveName) return { action: "proceed" };
 
+    const locale = resolveLocale(this.db, this.config, spaceId);
+
     const allowed = this.db.getSpaceConfig(
       spaceId,
       "security.sensitive_connections_allowed",
@@ -212,7 +219,9 @@ export class MercuryCoreRuntime {
     if (allowed !== "true") {
       return {
         action: "block",
-        reason: `⛔ Sensitive integrations (${sensitiveName}) are disabled for this group space. A space admin must enable them first with: mrctl config set security.sensitive_connections_allowed true`,
+        reason: formatSystemMessage(locale, "sensitive_disabled", {
+          name: sensitiveName,
+        }),
       };
     }
 
@@ -224,16 +233,20 @@ export class MercuryCoreRuntime {
       const ageMs = Date.now() - new Date(pendingAt).getTime();
       const expired = Number.isNaN(ageMs) || ageMs > 5 * 60 * 1000;
       const text = prompt.trim().toLowerCase();
+      const words = confirmWords(locale);
 
-      if (expired || text === "no") {
+      if (expired || words.no.includes(text)) {
         this.db.deleteSpaceConfig(spaceId, "security.pending_sensitive_prompt");
         this.db.deleteSpaceConfig(spaceId, "security.pending_sensitive_at");
         if (expired) {
           // Treat next message as fresh — fall through to new warning below
         } else {
-          return { action: "block", reason: "Cancelled." };
+          return {
+            action: "block",
+            reason: formatSystemMessage(locale, "sensitive_cancelled"),
+          };
         }
-      } else if (text === "yes") {
+      } else if (words.yes.includes(text)) {
         const storedPrompt = this.db.getSpaceConfig(
           spaceId,
           "security.pending_sensitive_prompt",
@@ -262,7 +275,9 @@ export class MercuryCoreRuntime {
     );
     return {
       action: "block",
-      reason: `⚠️ This response may contain data from ${sensitiveName} and will be visible to all members of this group. Reply *yes* to proceed or *no* to cancel.`,
+      reason: formatSystemMessage(locale, "sensitive_confirm", {
+        name: sensitiveName,
+      }),
     };
   }
 
@@ -542,7 +557,11 @@ export class MercuryCoreRuntime {
               const hoursLeft = Math.ceil(msUntilReset / 3_600_000);
               return {
                 type: "denied",
-                reason: `You've used ${daily.count}/${roleLimit} messages today. Resets in ${hoursLeft}h.`,
+                reason: formatSystemMessage(
+                  resolveLocale(this.db, this.config, message.spaceId),
+                  "rate_limit_daily",
+                  { count: daily.count, limit: roleLimit, hours: hoursLeft },
+                ),
               };
             }
           }
@@ -561,7 +580,10 @@ export class MercuryCoreRuntime {
       ) {
         return {
           type: "denied",
-          reason: "Rate limit exceeded. Try again shortly.",
+          reason: formatSystemMessage(
+            resolveLocale(this.db, this.config, message.spaceId),
+            "rate_limit_burst",
+          ),
         };
       }
     }
@@ -599,8 +621,10 @@ export class MercuryCoreRuntime {
     ) {
       return {
         type: "denied",
-        reason:
-          "Could not use your attachment (media disabled, over the size limit, or download failed). Check MERCURY_MEDIA_ENABLED and logs.",
+        reason: formatSystemMessage(
+          resolveLocale(this.db, this.config, message.spaceId),
+          "attachment_failed",
+        ),
       };
     }
 
@@ -636,15 +660,22 @@ export class MercuryCoreRuntime {
       return { ...route, result };
     } catch (error) {
       if (error instanceof ContainerError) {
+        const locale = resolveLocale(this.db, this.config, message.spaceId);
         switch (error.reason) {
           case "aborted":
-            return { type: "denied", reason: "Stopped current run." };
+            return {
+              type: "denied",
+              reason: formatSystemMessage(locale, "run_stopped"),
+            };
           case "timeout":
-            return { type: "denied", reason: "Container timed out." };
+            return {
+              type: "denied",
+              reason: formatSystemMessage(locale, "container_timeout"),
+            };
           case "oom":
             return {
               type: "denied",
-              reason: "Container was killed (possibly out of memory).",
+              reason: formatSystemMessage(locale, "container_oom"),
             };
           case "no-credentials": {
             // Host refused to start the container (no model credential).
@@ -656,6 +687,7 @@ export class MercuryCoreRuntime {
               "auth",
               this.config.apiKeyMode,
               this.config.consoleUrl,
+              locale,
             );
             return { type: "denied", reason };
           }
@@ -669,6 +701,7 @@ export class MercuryCoreRuntime {
               category,
               this.config.apiKeyMode,
               this.config.consoleUrl,
+              locale,
             );
             return { type: "denied", reason };
           }
@@ -1268,8 +1301,10 @@ export class MercuryCoreRuntime {
             };
             if (!quotaData.allowed) {
               return {
-                reply:
-                  "You've reached your daily message limit. Upgrade your plan at the Mercury Console to continue chatting.",
+                reply: formatSystemMessage(
+                  resolveLocale(this.db, this.config, spaceId),
+                  "platform_quota_exceeded",
+                ),
                 files: [],
               };
             }

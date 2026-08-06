@@ -87,6 +87,13 @@
 #   default_system_prompt: ""                   # seeded into auto-created user spaces
 #   default_member_permissions: "prompt,prefs.get"  # restrict users to chat only
 
+# ─── System messages ────────────────────────────────────────────────────────
+# Deployment-wide default language for Mercury-generated system messages
+# (rate-limit denials, error messages, permission denials). Overridable
+# per-space from the dashboard or chat: mrctl config set messages.locale he
+# messages:
+#   locale: en                    # en | he
+
 # ─── Extension config defaults ──────────────────────────────────────────────
 # Deployment-wide defaults for extension config keys, applied to every space
 # (incl. auto-created DM spaces) unless overridden per-space or in the
