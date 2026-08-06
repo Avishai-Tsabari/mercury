@@ -96,7 +96,7 @@ describe("dm-auto-space", () => {
     );
     expect(
       db.getSpaceConfig("dm-972509999999", "role.member.permissions"),
-    ).toBe("prompt,prefs.get");
+    ).toBe("prompt,prefs.get,media.receive,media.send");
     expect(db.getSpaceConfig("dm-972509999999", "system_prompt")).toBe(
       "You are a helpful assistant",
     );

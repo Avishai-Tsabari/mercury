@@ -269,6 +269,47 @@ export class Db {
     this.ensureSpaceRolesDisplayNameColumn();
     this.ensureTasksTimezoneColumn();
     this.ensureTasksNameColumn();
+    this.migrateMediaPermissionRows();
+  }
+
+  /**
+   * One-time migration for the introduction of `media.receive` / `media.send`.
+   *
+   * Media exchange was ungated before these permissions existed, so a stored
+   * `role.<name>.permissions` row written pre-upgrade carries no revocation
+   * intent for them — append both to preserve behavior. Rows mentioning either
+   * name are left verbatim (`media.purge` predates the pair and is not an
+   * opt-out signal). `updated_by` is intentionally preserved so dm-auto-space
+   * seeded rows keep yielding to an active profile. Version-gated via a
+   * project_config guard key: after this runs once, stored lists are literal
+   * and revocation via `permissions set` sticks.
+   */
+  private migrateMediaPermissionRows(): void {
+    const guardKey = "migration.media_role_permissions";
+    if (this.getProjectConfig(guardKey) !== null) return;
+
+    const rows = this.db
+      .query(
+        "SELECT space_id, key, value FROM space_config WHERE key LIKE 'role.%.permissions'",
+      )
+      .all() as { space_id: string; key: string; value: string }[];
+
+    const update = this.db.query(
+      "UPDATE space_config SET value = ?, updated_at = ? WHERE space_id = ? AND key = ?",
+    );
+    for (const row of rows) {
+      const entries = row.value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (entries.some((e) => e === "media.receive" || e === "media.send")) {
+        continue;
+      }
+      const next = [...entries, "media.receive", "media.send"].join(",");
+      update.run(next, Date.now(), row.space_id, row.key);
+    }
+
+    this.setProjectConfig(guardKey, "1", "migration");
   }
 
   private ensureMessagesRunMetaColumn(): void {

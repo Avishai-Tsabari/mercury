@@ -136,6 +136,14 @@ the extension's `SKILL.md` or the profile's `AGENTS.md`.
 - **`member_permissions` is exhaustive.** List every permission a member may
   hold, including the capability name (e.g. `rooms`). Anything not listed —
   including raw capabilities like `gws` — is unavailable to members.
+  One back-compat exception: a list that mentions neither `media.receive` nor
+  `media.send` gets both appended at load time (media exchange predates these
+  permissions, so their absence carries no revocation intent). To restrict
+  media for members, list at least one of them explicitly — a list mentioning
+  either is taken verbatim. `media.purge` does not count as an opt-out.
+  Known limitation: denying *both* media permissions cannot be expressed in a
+  profile list (mentioning one grants it; mentioning neither appends both) —
+  use a per-space override (`mrctl permissions set member …`) for a full deny.
 - **Authorization = permission named after the capability.** The broker route
   requires the caller to hold the `<name>` permission; the same grant gates both
   the `mrctl capability <name> …` CLI and the route. Keep capability name =

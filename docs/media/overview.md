@@ -48,6 +48,15 @@ interface MessageAttachment {
 | `MERCURY_MEDIA_ENABLED` | `true` | Enable/disable media downloads |
 | `MERCURY_MEDIA_MAX_SIZE_MB` | `10` | Max file size to download (MB) |
 
+## Permission Gating
+
+The pipeline is gated per caller role, per space by two built-in permissions (both granted to `member` by default — see [permissions.md](../permissions.md)):
+
+- **`media.receive`** — when the caller's role lacks it, incoming files are deleted from `inbox/` before the container runs and dropped from the stored message. The message text still goes through, and the agent receives a system note that files arrived but were blocked. Covers all media types including voice notes (revoking it disables voice transcription for that role).
+- **`media.send`** — when the caller's role lacks it, files produced during that caller's turn are not delivered; the reply carries a one-line notice. The files stay in `outbox/` (TTL cleanup applies).
+
+`admin` and `system` callers (scheduled tasks) are exempt. Gating is per-caller-turn: in a shared group, a blocked member's turns are gated while an admin's turns deliver files normally. Bridges still download media before routing — the write is transient; the gate deletes it before the message is saved or any agent code runs.
+
 ## Storage
 
 ### Ingress (inbox/)

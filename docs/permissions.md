@@ -28,7 +28,7 @@ Message arrives
 |------|---------------------|-------------|
 | `system` | All | Internal system caller (scheduler, etc.) — not assignable |
 | `admin` | All | Full control over the space |
-| `member` | `prompt`, `prefs.get` | Can chat and read space preferences (default for new users) |
+| `member` | `prompt`, `prefs.get`, `media.receive`, `media.send` | Can chat, read space preferences, and exchange files (default for new users) |
 
 Custom roles can be created by assigning permissions to any role name.
 
@@ -56,6 +56,19 @@ Custom roles can be created by assigning permissions to any role name.
 | `spaces.list` | View all spaces |
 | `spaces.rename` | Rename a space and link/unlink conversations |
 | `spaces.delete` | Delete current space and all related DB data |
+| `media.receive` | Incoming attachments are saved to `inbox/` and shown to the agent |
+| `media.send` | Outbox files produced on this caller's turn are delivered back to the chat |
+
+### Media permissions
+
+`media.receive` and `media.send` gate the media pipeline per caller role, per space. Both are granted to `member` by default, so behavior is unchanged unless an operator revokes them (e.g. `mrctl permissions set member prompt,prefs.get` — omitting the media names revokes them in that space).
+
+Denials are never silent:
+
+- **Blocked receive** — the caller's inbox files are deleted from disk before the container runs and dropped from the stored message; the message text still goes through, and the agent is told via a system note that files arrived but were blocked. `media.receive` covers all media types, including voice notes — revoking it also disables voice-message transcription for that role.
+- **Blocked send** — files produced during that caller's turn are not delivered; the reply carries a one-line notice. The files remain in `outbox/` for admin retrieval until TTL cleanup removes them.
+
+`admin` and `system` callers (scheduled tasks) are always exempt — the gates never fire for them. Lists that predate these permissions (profile manifests, stored per-space overrides, operator `defaultMemberPermissions` configs) get both names appended automatically for backwards compatibility; a list that mentions either name is taken verbatim (`media.purge` predates the pair and does not count as an opt-out).
 
 ## Mutes
 

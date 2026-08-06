@@ -1,6 +1,7 @@
 import { logger } from "../logger.js";
 import type { Db } from "../storage/db.js";
 import type { Conversation } from "../types.js";
+import { withMediaBackCompat } from "./permissions.js";
 
 export interface ConversationResolution {
   conversation: Conversation;
@@ -159,11 +160,17 @@ export function resolveConversation(
   seedSpaceConfigIfAbsent(db, spaceId, "context.mode", "context");
   seedSpaceConfigIfAbsent(db, spaceId, "debounce.idle_timeout_ms", "2000");
   if (autoSpace.defaultMemberPermissions) {
+    // Seed-time back-compat: an operator config authored before the media
+    // permissions existed must not deny media in newly auto-created spaces
+    // while migrated older spaces allow it. A list mentioning either media
+    // transfer name is an explicit choice and is seeded verbatim.
     seedSpaceConfigIfAbsent(
       db,
       spaceId,
       "role.member.permissions",
-      autoSpace.defaultMemberPermissions,
+      withMediaBackCompat(
+        autoSpace.defaultMemberPermissions.split(",").map((s) => s.trim()),
+      ).join(","),
     );
   }
   if (autoSpace.defaultSystemPrompt) {

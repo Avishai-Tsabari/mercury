@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { withMediaBackCompat } from "./permissions.js";
 
 // ─── Profile Schema ───────────────────────────────────────────────────────
 
@@ -208,7 +209,13 @@ export function loadActiveProfile(dataDir: string): ActiveProfile | null {
     const raw = JSON.parse(readFileSync(file, "utf-8"));
     return {
       name: raw.name,
-      memberPermissions: raw.memberPermissions ?? null,
+      // Load-time back-compat: profile manifests authored before the media
+      // permissions existed must keep member media working. Applied here (not
+      // at persist time) so already-deployed active-profile.json files are
+      // covered on every startup.
+      memberPermissions: Array.isArray(raw.memberPermissions)
+        ? withMediaBackCompat(raw.memberPermissions)
+        : null,
       profilePrompt: raw.profilePrompt ?? raw.systemPrompt ?? null,
     };
   } catch {

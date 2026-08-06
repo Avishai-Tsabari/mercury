@@ -29,6 +29,10 @@ const BUILT_IN_PERMISSIONS = new Set([
   "spaces.delete",
   /** Purge inbox/outbox media files. */
   "media.purge",
+  /** Incoming attachments are saved to inbox/ and shown to the agent. */
+  "media.receive",
+  /** Outbox files produced on this caller's turn are delivered back. */
+  "media.send",
   /** Host Text-to-Speech (/api/tts); admin-only by default. */
   "tts.synthesize",
   /** Mute/unmute users and list mutes; admin-only by default. */
@@ -103,6 +107,23 @@ export function setActiveProfileMemberPermissions(
   activeProfileMemberPermissions = permissions;
 }
 
+/**
+ * Back-compat for permission lists authored before `media.receive` /
+ * `media.send` existed: media exchange used to be ungated, so a list that
+ * doesn't mention either name carries no revocation intent — append both to
+ * preserve behavior. A list mentioning either one has decided explicitly and
+ * is returned verbatim. `media.purge` predates this feature and is NOT an
+ * opt-out signal.
+ */
+export function withMediaBackCompat(permissions: string[]): string[] {
+  const mentionsMediaTransfer = permissions.some((p) => {
+    const t = p.trim();
+    return t === "media.receive" || t === "media.send";
+  });
+  if (mentionsMediaTransfer) return permissions;
+  return [...permissions, "media.receive", "media.send"];
+}
+
 /** Parse a permission list into a validated set (drops unknown names). */
 function toPermissionSet(list: string[]): Set<string> {
   return new Set(list.map((s) => s.trim()).filter((s) => isValidPermission(s)));
@@ -137,14 +158,19 @@ export function isSystemCaller(callerId: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** Built-in defaults for the member role */
-const DEFAULT_MEMBER_PERMISSIONS = new Set(["prompt", "prefs.get"]);
+const DEFAULT_MEMBER_PERMISSIONS = new Set([
+  "prompt",
+  "prefs.get",
+  "media.receive",
+  "media.send",
+]);
 
 /**
  * Compute the default permission set for a role, merging built-in defaults
  * with extension-registered defaults.
  *
  * - `admin` and `system` get all permissions (built-in + extension)
- * - `member` gets `prompt`, `prefs.get`, plus any extension permissions that list "member" in defaultRoles
+ * - `member` gets `prompt`, `prefs.get`, `media.receive`, `media.send`, plus any extension permissions that list "member" in defaultRoles
  * - Other roles get extension permissions that list them in defaultRoles
  */
 function getDefaultPermissions(role: string): Set<string> {

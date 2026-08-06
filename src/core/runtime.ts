@@ -30,6 +30,7 @@ import {
   DirectSendError,
   resolveRecipientSpaceId,
 } from "./direct-send.js";
+import { gateIncomingMedia, gateOutgoingMedia } from "./media-gate.js";
 import { hasPermission, resolveRole } from "./permissions.js";
 import { getActiveProfilePrompt } from "./profiles.js";
 import { RateLimiter } from "./rate-limiter.js";
@@ -626,7 +627,11 @@ export class MercuryCoreRuntime {
           replyToPlatformMessageId: message.replyToPlatformMessageId,
           platformMessageId: message.platformMessageId,
         },
-        { isReplyToBot: route.isReplyToBot, isDM: route.isDM },
+        {
+          isReplyToBot: route.isReplyToBot,
+          isDM: route.isDM,
+          hadIncomingAttachments: message.hadIncomingAttachments ?? false,
+        },
       );
       return { ...route, result };
     } catch (error) {
@@ -1211,7 +1216,7 @@ export class MercuryCoreRuntime {
   private async executePrompt(
     spaceId: string,
     prompt: string,
-    _source: InputSource,
+    source: InputSource,
     callerId: string,
     attachments?: MessageAttachment[],
     authorName?: string,
@@ -1221,7 +1226,11 @@ export class MercuryCoreRuntime {
       replyToPlatformMessageId?: string;
       platformMessageId?: string;
     },
-    replyFlags?: { isReplyToBot: boolean; isDM: boolean },
+    replyFlags?: {
+      isReplyToBot: boolean;
+      isDM: boolean;
+      hadIncomingAttachments?: boolean;
+    },
   ): Promise<ContainerResult> {
     this.db.ensureSpace(spaceId);
 
@@ -1342,6 +1351,50 @@ export class MercuryCoreRuntime {
       }
       // ────────────────────────────────────────────────────────────────────
 
+      // ── Media permission gates (media.receive / media.send) ─────────────
+      // Role resolved once here for both gates. Scheduled tasks are exempt by
+      // source (task delivery must keep working regardless of member
+      // settings); admin and system callers are exempt by rule.
+      const mediaRole =
+        source === "scheduler"
+          ? "system"
+          : resolveRole(
+              this.db,
+              spaceId,
+              callerId,
+              this.config.admins
+                ? this.config.admins
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                : [],
+            );
+      const mediaExempt = mediaRole === "admin" || mediaRole === "system";
+
+      // Receive gate — enforced before hooks, the user-message save, and the
+      // container start, so denied files are deleted from disk before any
+      // agent code can reach them (the container mounts the workspace).
+      let effectiveAttachments = attachments;
+      if (
+        !mediaExempt &&
+        !hasPermission(this.db, spaceId, mediaRole, "media.receive")
+      ) {
+        const gated = gateIncomingMedia({
+          workspacePath: workspace,
+          spaceId,
+          callerRole: mediaRole,
+          attachments,
+          hadIncomingAttachments: replyFlags?.hadIncomingAttachments ?? false,
+        });
+        effectiveAttachments = gated.attachments;
+        if (gated.promptNote) {
+          finalPrompt = [finalPrompt, gated.promptNote]
+            .filter(Boolean)
+            .join("\n\n");
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       // Emit workspace_init hook (extensions should be idempotent)
       if (this.hooks && this.extensionCtx) {
         await this.hooks.emit(
@@ -1361,7 +1414,7 @@ export class MercuryCoreRuntime {
             callerId,
             workspace,
             containerWorkspace,
-            attachments,
+            attachments: effectiveAttachments,
           },
           this.extensionCtx,
         );
@@ -1486,7 +1539,7 @@ export class MercuryCoreRuntime {
         spaceId,
         "user",
         finalPrompt,
-        attachments,
+        effectiveAttachments,
         userReplyToId,
       );
 
@@ -1602,7 +1655,7 @@ export class MercuryCoreRuntime {
           callerId,
           callerRole,
           authorName,
-          attachments,
+          attachments: effectiveAttachments,
           preferences,
           extraEnv,
           claimedEnvSources: this.extensionRegistry?.getClaimedEnvSources(),
@@ -1644,6 +1697,26 @@ export class MercuryCoreRuntime {
           ];
         }
       }
+
+      // ── Media send gate ──────────────────────────────────────────────────
+      // Applied before the assistant message is stored so the withhold notice
+      // is part of the recorded reply. Withheld files stay in outbox/ for
+      // admin retrieval; TTL cleanup removes them later.
+      if (
+        !mediaExempt &&
+        containerResult.files.length > 0 &&
+        !hasPermission(this.db, spaceId, mediaRole, "media.send")
+      ) {
+        const gated = gateOutgoingMedia({
+          spaceId,
+          callerRole: mediaRole,
+          files: containerResult.files,
+          reply: containerResult.reply,
+        });
+        containerResult.files = gated.files;
+        containerResult.reply = gated.reply;
+      }
+      // ────────────────────────────────────────────────────────────────────
 
       const assistantMessageId = this.db.addMessage(
         spaceId,

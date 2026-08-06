@@ -124,7 +124,14 @@ profile_prompt: |
     persistActiveProfile(profile, dataDir);
     const loaded = loadActiveProfile(dataDir);
     expect(loaded?.name).toBe("room-booking");
-    expect(loaded?.memberPermissions).toEqual(["prompt", "rooms"]);
+    // Load-time back-compat: a profile that doesn't mention the media
+    // transfer permissions gets both appended.
+    expect(loaded?.memberPermissions).toEqual([
+      "prompt",
+      "rooms",
+      "media.receive",
+      "media.send",
+    ]);
     expect(loaded?.profilePrompt).toContain("Persona line.");
   });
 
