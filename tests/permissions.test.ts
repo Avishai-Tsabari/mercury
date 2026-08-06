@@ -12,6 +12,7 @@ import {
   resolveRole,
   seededSpaces,
   setActiveProfileMemberPermissions,
+  warnedRepromotions,
 } from "../src/core/permissions.js";
 import { Db } from "../src/storage/db.js";
 
@@ -23,6 +24,7 @@ beforeEach(() => {
   db = new Db(path.join(tmpDir, "state.db"));
   db.ensureSpace("g1");
   seededSpaces.clear();
+  warnedRepromotions.clear();
   resetPermissions();
 });
 
@@ -372,6 +374,60 @@ describe("resolveRole", () => {
       "+972542341444",
     ]);
     expect(role).toBe("admin");
+  });
+
+  test("self-heal re-promotion is recorded once per (space, caller)", () => {
+    seededSpaces.add("g1");
+    db.setRole("g1", "whatsapp:972542341444@s.whatsapp.net", "member", "a1");
+    resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(
+      warnedRepromotions.has("g1\u0000whatsapp:972542341444@s.whatsapp.net"),
+    ).toBe(true);
+    expect(warnedRepromotions.size).toBe(1);
+
+    // Demote again and resolve again — the dedup key persists, no new entry.
+    db.setRole("g1", "whatsapp:972542341444@s.whatsapp.net", "member", "a1");
+    resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "+972542341444",
+    ]);
+    expect(warnedRepromotions.size).toBe(1);
+  });
+
+  test("re-seed re-promotion of a demoted config admin is recorded", () => {
+    db.ensureSpace("g2");
+    db.setRole("g2", "whatsapp:972542341444@s.whatsapp.net", "member", "a1");
+    resolveRole(db, "g2", "whatsapp:972542341444@s.whatsapp.net", [
+      "whatsapp:972542341444@s.whatsapp.net",
+    ]);
+    expect(
+      warnedRepromotions.has("g2\u0000whatsapp:972542341444@s.whatsapp.net"),
+    ).toBe(true);
+  });
+
+  test("first-contact loose-match self-heal records no re-promotion", () => {
+    // Space already seeded (with the LID form), caller arrives for the first
+    // time under the canonical phone JID — upsertMember creates the member
+    // row in the same call. Self-heal promotes, but nothing was overridden.
+    seededSpaces.add("g1");
+    db.learnWaAlias(
+      "24417056866472@lid",
+      "972542341444@s.whatsapp.net",
+      "key-alt",
+    );
+    const role = resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "24417056866472",
+    ]);
+    expect(role).toBe("admin");
+    expect(warnedRepromotions.size).toBe(0);
+  });
+
+  test("clean seed of a new admin row records no re-promotion", () => {
+    resolveRole(db, "g1", "whatsapp:972542341444@s.whatsapp.net", [
+      "whatsapp:972542341444@s.whatsapp.net",
+    ]);
+    expect(warnedRepromotions.size).toBe(0);
   });
 
   test("explicit non-member role is not overridden by loose matching", () => {

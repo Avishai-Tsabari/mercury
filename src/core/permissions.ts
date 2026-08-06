@@ -1,3 +1,4 @@
+import { logger } from "../logger.js";
 import type { Db } from "../storage/db.js";
 import { matchesConfiguredId } from "./global-admin.js";
 
@@ -139,6 +140,36 @@ function toPermissionSet(list: string[]): Set<string> {
  */
 export const seededSpaces = new Set<string>();
 
+/**
+ * (space, caller) pairs whose config-admin re-promotion was already logged —
+ * once per process, not per message (resolveRole runs on every message).
+ * Exported for test isolation (tests should clear this in beforeEach).
+ */
+export const warnedRepromotions = new Set<string>();
+
+/**
+ * A stored non-admin role was overridden back to admin because the caller is
+ * listed in config.admins. The override is deliberate (config admins are
+ * always admins), but it must be visible: an operator's explicit demotion
+ * otherwise silently doesn't hold. Deduped once per (space, caller) per
+ * process.
+ */
+function warnConfigAdminRepromotion(
+  spaceId: string,
+  callerId: string,
+  source: "re-seed" | "self-heal",
+): void {
+  // NUL separator: caller ids contain ":" (e.g. "whatsapp:..."), so a ":"
+  // join could collide distinct (space, caller) pairs.
+  const key = `${spaceId}\u0000${callerId}`;
+  if (warnedRepromotions.has(key)) return;
+  warnedRepromotions.add(key);
+  logger.warn(
+    "Config admin re-promoted: stored role overridden — remove from config.admins to demote",
+    { spaceId, callerId, source },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // System callers
 // ---------------------------------------------------------------------------
@@ -252,13 +283,19 @@ export function resolveRole(
   if (isSystemCaller(platformUserId)) return "system";
 
   if (seededAdmins.length > 0 && !seededSpaces.has(spaceId)) {
-    db.seedAdmins(spaceId, seededAdmins);
+    for (const id of db.seedAdmins(spaceId, seededAdmins)) {
+      warnConfigAdminRepromotion(spaceId, id, "re-seed");
+    }
     seededSpaces.add(spaceId);
   }
 
+  // Read before upsertMember, which inserts a fresh "member" row on first
+  // contact — a null here distinguishes "never seen" from "operator demoted".
+  const storedRole = db.getRole(spaceId, platformUserId);
+
   db.upsertMember(spaceId, platformUserId, displayName);
 
-  const role = db.getRole(spaceId, platformUserId) ?? "member";
+  const role = storedRole ?? "member";
 
   // Seeded rows are keyed by the raw config string, which may differ from the
   // canonical caller id (format looseness, WhatsApp LID vs phone JID). When the
@@ -269,6 +306,11 @@ export function resolveRole(
     role === "member" &&
     matchesConfiguredId(platformUserId, seededAdmins, db)
   ) {
+    // Warn only when a member row pre-existed (a stored demotion being
+    // overridden) — a first-contact self-heal has nothing to override.
+    if (storedRole === "member") {
+      warnConfigAdminRepromotion(spaceId, platformUserId, "self-heal");
+    }
     db.setRole(spaceId, platformUserId, "admin", "seed");
     return "admin";
   }

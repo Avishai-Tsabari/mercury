@@ -147,7 +147,14 @@ export function createChatRoute(core: MercuryCoreRuntime): Hono {
     }
 
     if (authenticated) {
-      core.db.seedAdmins(spaceId, [callerId]);
+      // Fires at most once per actual override: after the re-promotion the
+      // row is admin again, so later requests return an empty list.
+      for (const id of core.db.seedAdmins(spaceId, [callerId])) {
+        logger.warn(
+          "Authenticated chat caller re-promoted: stored role overridden",
+          { spaceId, callerId: id },
+        );
+      }
     }
 
     const ingress: IngressMessage = {

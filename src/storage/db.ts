@@ -1349,9 +1349,23 @@ export class Db {
     return result.changes > 0;
   }
 
-  seedAdmins(spaceId: string, adminIds: string[]): void {
+  /**
+   * Seed admin roles. Returns the ids whose existing row held a non-admin
+   * role and was overridden back to admin, so the caller can log the
+   * re-promotion (this layer stays log-free).
+   */
+  seedAdmins(spaceId: string, adminIds: string[]): string[] {
     const now = Date.now();
+    const repromoted: string[] = [];
     for (const id of adminIds) {
+      const existing = this.db
+        .query(
+          "SELECT role FROM space_roles WHERE space_id = ? AND platform_user_id = ?",
+        )
+        .get(spaceId, id) as { role: string } | null;
+      if (existing && existing.role !== "admin") {
+        repromoted.push(id);
+      }
       this.db
         .query(
           `INSERT INTO space_roles(space_id, platform_user_id, role, granted_by, created_at, updated_at)
@@ -1362,6 +1376,7 @@ export class Db {
         )
         .run(spaceId, id, now, now);
     }
+    return repromoted;
   }
 
   // --- Space Config ---

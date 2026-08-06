@@ -506,6 +506,19 @@ describe("roles", () => {
     expect(db.getRole("g1", "user1")).toBe("admin");
   });
 
+  test("seedAdmins returns ids whose demoted row was re-promoted", () => {
+    db.ensureSpace("g1");
+    db.setRole("g1", "user1", "member", "a1"); // demoted — will be overridden
+    db.setRole("g1", "user2", "admin", "manual"); // already admin
+    // user3 has no row — fresh insert
+
+    const repromoted = db.seedAdmins("g1", ["user1", "user2", "user3"]);
+
+    expect(repromoted).toEqual(["user1"]);
+    expect(db.getRole("g1", "user1")).toBe("admin");
+    expect(db.getRole("g1", "user3")).toBe("admin");
+  });
+
   test("roles are isolated between spaces", () => {
     db.ensureSpace("g1");
     db.ensureSpace("g2");
